@@ -10,17 +10,17 @@
    ravishda faqat shu qurilmada (mahalliy) ishlaydi.
 ------------------------------------------------------------------------- */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDE6y2ZbXcc3YDPYM-IMwTQ5sZJuxKbcrA",
+  authDomain: "qurany-7d105.firebaseapp.com",
+  projectId: "qurany-7d105",
+  storageBucket: "qurany-7d105.firebasestorage.app",
+  messagingSenderId: "593144843405",
+  appId: "1:593144843405:web:db26cbcc5e105dea90a6c4"
 };
 
 let fbAuth = null, fbDb = null, firebaseReady = false;
 try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY" && typeof firebase !== "undefined") {
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIzaSyDE6y2ZbXcc3YDPYM-IMwTQ5sZJuxKbcrA" && typeof firebase !== "undefined") {
     firebase.initializeApp(firebaseConfig);
     fbAuth = firebase.auth();
     fbDb = firebase.firestore();
@@ -35,9 +35,9 @@ try {
    qo'ying.
 ------------------------------------------------------------------------- */
 const SOCIAL_LINKS = {
-  telegram: "https://t.me/your_username",
-  instagram: "https://instagram.com/your_username",
-  donateTelegram: "https://t.me/your_username"
+  telegram: "https://t.me/yuuvsuf",
+  instagram: "https://instagram.com/yunusovvyusuf",
+  donateTelegram: "https://t.me/yuuvsuf"
 };
 
 /* ---------- LOTIN → KIRILL AVTOMATIK TRANSLITERATSIYA ------------------- */
