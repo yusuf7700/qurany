@@ -1,0 +1,542 @@
+/* =========================================================
+   QuranY — App logic
+   ========================================================= */
+
+/* ---------- FIREBASE (ixtiyoriy) ----------------------------------------
+   Cross-device sinxronizatsiya uchun o'zingizning Firebase loyihangizni
+   ulang: https://console.firebase.google.com → Project settings → SDK config.
+   Google Sign-In provayderini yoqishni va Firestore'ni "test mode"da
+   yaratishni unutmang. Config to'ldirilmagan bo'lsa, ilova avtomatik
+   ravishda faqat shu qurilmada (mahalliy) ishlaydi.
+------------------------------------------------------------------------- */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+let fbAuth = null, fbDb = null, firebaseReady = false;
+try {
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY" && typeof firebase !== "undefined") {
+    firebase.initializeApp(firebaseConfig);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    firebaseReady = true;
+  }
+} catch (e) {
+  console.warn("Firebase sozlanmagan — mahalliy rejimda ishlaydi.", e);
+}
+
+/* ---------- KUNLIK TAKLIFLAR / DONAT HAVOLALARI -------------------------
+   O'zingizning Telegram/Instagram foydalanuvchi nomlaringizni shu yerga
+   qo'ying.
+------------------------------------------------------------------------- */
+const SOCIAL_LINKS = {
+  telegram: "https://t.me/your_username",
+  instagram: "https://instagram.com/your_username",
+  donateTelegram: "https://t.me/your_username"
+};
+
+/* ---------- LOTIN → KIRILL AVTOMATIK TRANSLITERATSIYA ------------------- */
+function uzLatToCyr(str) {
+  if (!str) return str;
+  const map2 = { "o'": "ў", "o‘": "ў", "g'": "ғ", "g‘": "ғ", "sh": "ш", "ch": "ч", "ng": "нг" };
+  const map1 = { a:"а",b:"б",d:"д",e:"е",f:"ф",g:"г",h:"ҳ",i:"и",j:"ж",k:"к",l:"л",m:"м",n:"н",
+                 o:"о",p:"п",q:"қ",r:"р",s:"с",t:"т",u:"у",v:"в",x:"х",y:"й",z:"з","'":"ъ","‘":"ъ" };
+  let out = "";
+  let i = 0;
+  while (i < str.length) {
+    const two = str.substr(i, 2).toLowerCase();
+    if (map2[two]) {
+      const orig = str.substr(i, 2);
+      let rep = map2[two];
+      if (orig === orig.toUpperCase() && orig.toLowerCase() !== orig.toUpperCase()) rep = rep.toUpperCase();
+      else if (orig[0] === orig[0].toUpperCase()) rep = rep.charAt(0).toUpperCase() + rep.slice(1);
+      out += rep;
+      i += 2;
+      continue;
+    }
+    const ch = str[i];
+    const low = ch.toLowerCase();
+    if (map1[low]) {
+      let rep = map1[low];
+      if (ch === ch.toUpperCase() && ch.toLowerCase() !== ch.toUpperCase()) rep = rep.toUpperCase();
+      out += rep;
+    } else {
+      out += ch;
+    }
+    i += 1;
+  }
+  return out;
+}
+function L(str) { return currentScript() === "kirill" ? uzLatToCyr(str) : str; }
+function currentScript() { return (appData && appData.settings && appData.settings.script) || "lotin"; }
+
+/* ---------- SANA YORDAMCHILARI ------------------------------------------ */
+function pad(n) { return String(n).padStart(2, "0"); }
+function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function todayKey() { return dateKey(new Date()); }
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function dayOfYear(d) { const start = new Date(d.getFullYear(), 0, 0); return Math.floor((d - start) / 86400000); }
+
+const WEEKDAY_LABELS = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"]; // getDay(): 0=Yakshanba
+
+/* ---------- HOLAT (STATE) ----------------------------------------------- */
+let currentUser = null;   // {uid, name, email, isGuest}
+let appData = null;       // {name, goals:{pages,verses}, logs:{date:{pages,verses}}, settings:{theme,script}}
+let draft = { pages: 0, verses: 0 };
+let deferredInstallPrompt = null;
+
+const LS_PREFIX = "quranY_v1_";
+function loadLocal(uid) {
+  try { return JSON.parse(localStorage.getItem(LS_PREFIX + uid)); } catch (e) { return null; }
+}
+function saveLocalRaw(uid, data) {
+  try { localStorage.setItem(LS_PREFIX + uid, JSON.stringify(data)); } catch (e) {}
+}
+function defaultData(name) {
+  return {
+    name: name || "Do'stim",
+    goals: { pages: 3, verses: 5 },
+    logs: {},
+    settings: { theme: "light", script: "lotin" }
+  };
+}
+function mergeData(local, remote) {
+  if (!remote) return local;
+  const merged = Object.assign({}, remote);
+  merged.logs = Object.assign({}, remote.logs || {});
+  // Mahalliy qurilmada bor-u, serverga hali sinxron bo'lmagan kunlarni qo'shib qo'yamiz
+  if (local && local.logs) {
+    for (const k in local.logs) {
+      if (!merged.logs[k]) merged.logs[k] = local.logs[k];
+    }
+  }
+  merged.goals = remote.goals || (local && local.goals) || { pages: 3, verses: 5 };
+  merged.settings = remote.settings || (local && local.settings) || { theme: "light", script: "lotin" };
+  return merged;
+}
+function persist() {
+  saveLocalRaw(currentUser.uid, appData);
+  if (firebaseReady && !currentUser.isGuest && fbDb) {
+    fbDb.collection("users").doc(currentUser.uid).set(appData).catch(() => {});
+  }
+}
+
+/* ---------- TOAST --------------------------------------------------------*/
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+}
+
+/* ---------- EKRANLAR / NAVIGATSIYA --------------------------------------*/
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("view-" + name).classList.add("active");
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  window.scrollTo(0, 0);
+}
+
+/* ---------- AUTENTIFIKATSIYA ---------------------------------------------*/
+function bindAuthEvents() {
+  document.getElementById("btnGoogle").addEventListener("click", async () => {
+    if (!firebaseReady) {
+      toast("Google kirish hali sozlanmagan — \"Ism bilan davom etish\"dan foydalaning.");
+      return;
+    }
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const result = await fbAuth.signInWithPopup(provider);
+      await handleFirebaseUser(result.user);
+    } catch (e) {
+      toast("Kirishda xatolik yuz berdi.");
+    }
+  });
+
+  document.getElementById("btnShowGuest").addEventListener("click", () => {
+    document.getElementById("guestForm").classList.add("open");
+  });
+
+  document.getElementById("btnGuestContinue").addEventListener("click", () => {
+    const name = document.getElementById("guestName").value.trim();
+    if (!name) { toast("Ismingizni kiriting"); return; }
+    currentUser = { uid: "guest", name, isGuest: true };
+    localStorage.setItem("quranY_guest_session", JSON.stringify(currentUser));
+    loadAppDataAndEnter();
+  });
+}
+
+async function handleFirebaseUser(user) {
+  currentUser = { uid: user.uid, name: user.displayName || "Do'stim", email: user.email, isGuest: false };
+  await loadAppDataAndEnter();
+}
+
+async function loadAppDataAndEnter() {
+  const local = loadLocal(currentUser.uid);
+  appData = local || defaultData(currentUser.name);
+  if (currentUser.name) appData.name = currentUser.name;
+
+  if (firebaseReady && !currentUser.isGuest && fbDb) {
+    try {
+      const snap = await fbDb.collection("users").doc(currentUser.uid).get();
+      if (snap.exists) {
+        appData = mergeData(appData, snap.data());
+      } else {
+        await fbDb.collection("users").doc(currentUser.uid).set(appData);
+      }
+    } catch (e) {
+      // Offline yoki Firestore mavjud emas — mahalliy nusxa bilan davom etamiz
+    }
+  }
+  saveLocalRaw(currentUser.uid, appData);
+  enterApp();
+}
+
+function enterApp() {
+  applyTheme(appData.settings.theme);
+  document.getElementById("scriptSelect").value = appData.settings.script;
+  tagLeaves();
+  applyScriptToStatics(appData.settings.script);
+  document.getElementById("bottomNav").style.display = "flex";
+  showScreen("dashboard");
+  renderAll();
+}
+
+function tryRestoreSession() {
+  const saved = JSON.parse(localStorage.getItem("quranY_guest_session") || "null");
+  if (saved) {
+    currentUser = saved;
+    loadAppDataAndEnter();
+  } else {
+    showScreen("auth");
+  }
+}
+
+function logout() {
+  if (firebaseReady && !currentUser.isGuest) {
+    fbAuth.signOut().catch(() => {});
+  }
+  localStorage.removeItem("quranY_guest_session");
+  currentUser = null;
+  appData = null;
+  document.getElementById("bottomNav").style.display = "none";
+  document.getElementById("guestForm").classList.remove("open");
+  document.getElementById("guestName").value = "";
+  showScreen("auth");
+}
+
+/* ---------- STREAK HISOBLASH ---------------------------------------------*/
+function isDayDone(key) {
+  const log = appData.logs[key];
+  return !!(log && log.pages >= appData.goals.pages);
+}
+function computeCurrentStreak() {
+  let cursor = new Date();
+  if (!isDayDone(dateKey(cursor))) cursor = addDays(cursor, -1);
+  let streak = 0;
+  while (isDayDone(dateKey(cursor))) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+function computeLongestStreak() {
+  const keys = Object.keys(appData.logs).sort();
+  let longest = 0, run = 0, prevDate = null;
+  for (const k of keys) {
+    if (!isDayDone(k)) { run = 0; prevDate = null; continue; }
+    const d = new Date(k + "T00:00:00");
+    if (prevDate && dateKey(addDays(prevDate, 1)) === k) run++;
+    else run = 1;
+    longest = Math.max(longest, run);
+    prevDate = d;
+  }
+  return longest;
+}
+
+/* ---------- KUNNING OYATI / HADISI ----------------------------------------*/
+function todayQuote() {
+  const idx = dayOfYear(new Date()) % QURANY_QUOTES.length;
+  return QURANY_QUOTES[idx];
+}
+
+/* ---------- DASHBOARD ------------------------------------------------------*/
+function initDraftFromToday() {
+  const log = appData.logs[todayKey()] || { pages: 0, verses: 0 };
+  draft.pages = log.pages || 0;
+  draft.verses = log.verses || 0;
+}
+
+function renderDashboard() {
+  document.getElementById("dashName").textContent = appData.name;
+
+  const q = todayQuote();
+  document.getElementById("quoteKind").textContent = L(q.type === "ayah" ? "Kunning oyati" : "Kunning hadisi");
+  document.getElementById("quoteText").textContent = L(q.text);
+  if (q.type === "ayah") {
+    document.getElementById("quoteRef").textContent = L(q.ref);
+    document.getElementById("quoteNarrator").textContent = "";
+  } else {
+    document.getElementById("quoteRef").textContent = L(q.source);
+    document.getElementById("quoteNarrator").textContent = L(q.narrator);
+  }
+
+  document.getElementById("pagesGoal").textContent = appData.goals.pages;
+  document.getElementById("versesGoal").textContent = appData.goals.verses;
+  updateDraftUI();
+
+  const streak = computeCurrentStreak();
+  document.getElementById("streakNum").textContent = streak;
+
+  const todayDone = isDayDone(todayKey());
+  document.getElementById("todayDoneHint").style.display = todayDone ? "flex" : "none";
+
+  renderWeekBeads();
+}
+
+function updateDraftUI() {
+  document.getElementById("pagesVal").textContent = draft.pages;
+  document.getElementById("pagesDone").textContent = draft.pages;
+  document.getElementById("versesVal").textContent = draft.verses;
+  document.getElementById("versesDone").textContent = draft.verses;
+  const pPct = Math.min(100, Math.round((draft.pages / Math.max(1, appData.goals.pages)) * 100));
+  const vPct = Math.min(100, Math.round((draft.verses / Math.max(1, appData.goals.verses)) * 100));
+  document.getElementById("pagesFill").style.width = pPct + "%";
+  document.getElementById("versesFill").style.width = vPct + "%";
+}
+
+function renderWeekBeads() {
+  const wrap = document.getElementById("weekBeads");
+  wrap.innerHTML = "";
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = addDays(today, -i);
+    const key = dateKey(d);
+    const bead = document.createElement("div");
+    bead.className = "bead" + (isDayDone(key) ? " filled" : "") + (i === 0 ? " today" : "");
+    bead.textContent = L(WEEKDAY_LABELS[d.getDay()]);
+    wrap.appendChild(bead);
+  }
+}
+
+function bindDashboardEvents() {
+  document.getElementById("pagesPlus").addEventListener("click", () => { draft.pages = Math.min(99, draft.pages + 1); updateDraftUI(); });
+  document.getElementById("pagesMinus").addEventListener("click", () => { draft.pages = Math.max(0, draft.pages - 1); updateDraftUI(); });
+  document.getElementById("versesPlus").addEventListener("click", () => { draft.verses = Math.min(99, draft.verses + 1); updateDraftUI(); });
+  document.getElementById("versesMinus").addEventListener("click", () => { draft.verses = Math.max(0, draft.verses - 1); updateDraftUI(); });
+
+  document.getElementById("btnSaveToday").addEventListener("click", () => {
+    appData.logs[todayKey()] = { pages: draft.pages, verses: draft.verses };
+    persist();
+    renderDashboard();
+    toast("Bugungi natija saqlandi!");
+  });
+}
+
+/* ---------- STATISTIKA -----------------------------------------------------*/
+let statsRange = "week";
+function renderStats() {
+  document.getElementById("statStreak").textContent = computeCurrentStreak();
+  document.getElementById("statLongest").textContent = computeLongestStreak();
+
+  let totalPages = 0, totalVerses = 0;
+  for (const k in appData.logs) {
+    totalPages += appData.logs[k].pages || 0;
+    totalVerses += appData.logs[k].verses || 0;
+  }
+  document.getElementById("statPagesTotal").textContent = totalPages;
+  document.getElementById("statVersesTotal").textContent = totalVerses;
+
+  document.getElementById("chartTitle").textContent = L("O'qilgan betlar");
+  const bars = document.getElementById("chartBars");
+  bars.innerHTML = "";
+
+  let buckets = [];
+  if (statsRange === "week") {
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = addDays(today, -i);
+      const key = dateKey(d);
+      buckets.push({ label: WEEKDAY_LABELS[d.getDay()], value: (appData.logs[key] && appData.logs[key].pages) || 0 });
+    }
+  } else {
+    // Oy: joriy oyni ~6 kunlik 5 ta bo'lakka bo'lamiz
+    const today = new Date();
+    for (let b = 4; b >= 0; b--) {
+      let sum = 0;
+      for (let i = b * 6; i < b * 6 + 6; i++) {
+        const d = addDays(today, -i);
+        const key = dateKey(d);
+        sum += (appData.logs[key] && appData.logs[key].pages) || 0;
+      }
+      buckets.push({ label: (5 - b) + "", value: sum });
+    }
+  }
+
+  const max = Math.max(1, ...buckets.map(b => b.value));
+  buckets.forEach(b => {
+    const wrap = document.createElement("div");
+    wrap.className = "bar-wrap";
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.height = Math.max(4, Math.round((b.value / max) * 100)) + "%";
+    const lbl = document.createElement("div");
+    lbl.className = "bar-lbl";
+    lbl.textContent = L(b.label);
+    wrap.appendChild(bar);
+    wrap.appendChild(lbl);
+    bars.appendChild(wrap);
+  });
+}
+
+function bindStatsEvents() {
+  document.querySelectorAll("#statsRange button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      statsRange = btn.dataset.range;
+      document.querySelectorAll("#statsRange button").forEach(b => b.classList.toggle("active", b === btn));
+      renderStats();
+    });
+  });
+}
+
+/* ---------- SOZLAMALAR ------------------------------------------------------*/
+function renderSettings() {
+  document.getElementById("setAccountName").textContent = appData.name;
+  document.getElementById("setAccountType").textContent = L(currentUser.isGuest ? "Mehmon rejimi (shu qurilmada saqlanadi)" : "Google akkaunt bilan ulangan");
+  document.getElementById("goalPagesVal").textContent = appData.goals.pages;
+  document.getElementById("goalVersesVal").textContent = appData.goals.verses;
+  document.getElementById("darkModeToggle").checked = appData.settings.theme === "dark";
+  document.getElementById("linkTelegram").href = SOCIAL_LINKS.telegram;
+  document.getElementById("linkInstagram").href = SOCIAL_LINKS.instagram;
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+}
+
+function bindSettingsEvents() {
+  document.getElementById("goalPagesPlus").addEventListener("click", () => { appData.goals.pages = Math.min(50, appData.goals.pages + 1); persist(); renderSettings(); });
+  document.getElementById("goalPagesMinus").addEventListener("click", () => { appData.goals.pages = Math.max(1, appData.goals.pages - 1); persist(); renderSettings(); });
+  document.getElementById("goalVersesPlus").addEventListener("click", () => { appData.goals.verses = Math.min(50, appData.goals.verses + 1); persist(); renderSettings(); });
+  document.getElementById("goalVersesMinus").addEventListener("click", () => { appData.goals.verses = Math.max(1, appData.goals.verses - 1); persist(); renderSettings(); });
+
+  document.getElementById("darkModeToggle").addEventListener("change", (e) => {
+    appData.settings.theme = e.target.checked ? "dark" : "light";
+    applyTheme(appData.settings.theme);
+    persist();
+  });
+
+  document.getElementById("scriptSelect").addEventListener("change", (e) => {
+    appData.settings.script = e.target.value;
+    persist();
+    applyScriptToStatics(appData.settings.script);
+    renderAll();
+  });
+
+  document.getElementById("btnLogout").addEventListener("click", logout);
+
+  document.getElementById("btnInstall").addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      if (choice.outcome === "accepted") toast("Ilova o'rnatilmoqda...");
+    } else {
+      toast("Bu qurilmada avtomatik o'rnatish mavjud emas. Brauzer menyusidan \"Bosh ekranga qo'shish\"ni tanlang.");
+    }
+  });
+
+  document.getElementById("btnDonate").addEventListener("click", () => {
+    document.getElementById("donateSheetBackdrop").classList.add("open");
+  });
+  document.getElementById("btnDonateClose").addEventListener("click", () => {
+    document.getElementById("donateSheetBackdrop").classList.remove("open");
+  });
+  document.getElementById("donateSheetBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "donateSheetBackdrop") e.currentTarget.classList.remove("open");
+  });
+  document.getElementById("donateContact").addEventListener("click", () => {
+    window.open(SOCIAL_LINKS.donateTelegram, "_blank");
+  });
+}
+
+/* ---------- I18N (LOTIN/KIRILL) STATIK MATNLAR ----------------------------*/
+function tagLeaves() {
+  const all = document.querySelectorAll("#app *");
+  all.forEach(el => {
+    const tag = el.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "SCRIPT") return;
+    if (el.children.length === 0 && el.textContent.trim().length > 0) {
+      if (!el.dataset.lat) el.dataset.lat = el.textContent;
+    }
+  });
+  document.querySelectorAll("#app option").forEach(o => { if (!o.dataset.lat) o.dataset.lat = o.textContent; });
+}
+function applyScriptToStatics(script) {
+  document.querySelectorAll("#app [data-lat]").forEach(el => {
+    el.textContent = script === "kirill" ? uzLatToCyr(el.dataset.lat) : el.dataset.lat;
+  });
+}
+
+/* ---------- NAV ---------------------------------------------------------- */
+function bindNav() {
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      showScreen(btn.dataset.view);
+      if (btn.dataset.view === "stats") renderStats();
+      if (btn.dataset.view === "settings") renderSettings();
+      if (btn.dataset.view === "dashboard") { initDraftFromToday(); renderDashboard(); }
+    });
+  });
+}
+
+function renderAll() {
+  initDraftFromToday();
+  renderDashboard();
+  renderStats();
+  renderSettings();
+}
+
+/* ---------- PWA: O'RNATISH VA SERVICE WORKER ------------------------------*/
+function setupInstallPrompt() {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
+}
+function registerSW() {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+}
+
+/* ---------- ISHGA TUSHIRISH ------------------------------------------------*/
+function init() {
+  bindAuthEvents();
+  bindNav();
+  bindDashboardEvents();
+  bindStatsEvents();
+  bindSettingsEvents();
+  setupInstallPrompt();
+  registerSW();
+
+  if (firebaseReady) {
+    fbAuth.onAuthStateChanged(user => {
+      if (user) handleFirebaseUser(user);
+      else tryRestoreSession();
+    });
+  } else {
+    tryRestoreSession();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);

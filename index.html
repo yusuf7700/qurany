@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>QuranY — Har kuni Qur'on bilan</title>
+<meta name="description" content="Kunlik Qur'on o'qish va yodlash vazifalarini kuzating, streak saqlang va statistikangizni ko'ring.">
+<meta name="theme-color" content="#1B4D3B">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== AUTH SCREEN ===================== -->
+  <section id="view-auth" class="screen active">
+    <img src="icons/logo.png" alt="QuranY" class="auth-logo">
+    <h1 class="auth-title">QuranY</h1>
+    <p class="auth-tagline">Har kuni Qur'on bilan</p>
+
+    <div class="auth-actions">
+      <button class="btn btn-google btn-block" id="btnGoogle">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.04l2.97-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.42 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+        <span>Google orqali kirish</span>
+      </button>
+
+      <div class="auth-divider">yoki</div>
+
+      <button class="btn btn-ghost btn-block" id="btnShowGuest">Ism bilan davom etish</button>
+      <div class="guest-form" id="guestForm">
+        <input type="text" class="input" id="guestName" placeholder="Ismingiz" maxlength="30">
+        <button class="btn btn-primary btn-block" id="btnGuestContinue">Davom etish</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <section id="view-dashboard" class="screen">
+    <div class="topbar">
+      <div>
+        <div class="hello">Assalomu alaykum,</div>
+        <div class="name" id="dashName">Do'stim</div>
+      </div>
+      <div class="streak-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c1 3-2 4-2 7a4 4 0 0 0 8 0c0-1-.3-2-.8-2.7.8.4 2.8 2 2.8 5.7a6 6 0 0 1-12 0C8 8 11 6 12 2z"/></svg>
+        <span id="streakNum">0</span>
+      </div>
+    </div>
+
+    <div class="card quote-card" id="quoteCard">
+      <div class="quote-ribbon"></div>
+      <div class="quote-kind" id="quoteKind">Kunning oyati</div>
+      <p class="quote-text" id="quoteText">—</p>
+      <p class="quote-ref" id="quoteRef"></p>
+      <p class="quote-narrator" id="quoteNarrator"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Bugungi vazifa</div>
+
+      <div class="task-row">
+        <div class="task-info">
+          <div class="task-name">📖 O'qish</div>
+          <div class="task-sub"><span id="pagesDone">0</span> / <span id="pagesGoal">3</span> bet</div>
+        </div>
+        <div class="stepper">
+          <button id="pagesMinus" aria-label="Kamaytirish">–</button>
+          <span class="val" id="pagesVal">0</span>
+          <button id="pagesPlus" aria-label="Ko'paytirish">+</button>
+        </div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="pagesFill" style="width:0%"></div></div>
+
+      <div class="task-row" style="margin-top:18px;">
+        <div class="task-info">
+          <div class="task-name">🕋 Yodlash</div>
+          <div class="task-sub"><span id="versesDone">0</span> / <span id="versesGoal">5</span> oyat</div>
+        </div>
+        <div class="stepper">
+          <button id="versesMinus" aria-label="Kamaytirish">–</button>
+          <span class="val" id="versesVal">0</span>
+          <button id="versesPlus" aria-label="Ko'paytirish">+</button>
+        </div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="versesFill" style="width:0%"></div></div>
+
+      <button class="btn btn-primary btn-block" id="btnSaveToday" style="margin-top:18px;">Bugungini saqlash</button>
+      <div class="done-check" id="todayDoneHint" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+        Bugungi o'qish vazifasi bajarildi — streak davom etmoqda!
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Shu haftalik davomiylik</div>
+      <div class="beads-row" id="weekBeads"></div>
+    </div>
+  </section>
+
+  <!-- ===================== STATISTIKA ===================== -->
+  <section id="view-stats" class="screen">
+    <h2 style="margin-bottom:16px;">Statistika</h2>
+
+    <div class="stat-grid">
+      <div class="stat-box"><div class="num" id="statStreak">0</div><div class="lbl">Joriy streak (kun)</div></div>
+      <div class="stat-box"><div class="num" id="statLongest">0</div><div class="lbl">Eng uzun streak</div></div>
+      <div class="stat-box"><div class="num" id="statPagesTotal">0</div><div class="lbl">Jami o'qilgan bet</div></div>
+      <div class="stat-box"><div class="num" id="statVersesTotal">0</div><div class="lbl">Jami yodlangan oyat</div></div>
+    </div>
+
+    <div class="card">
+      <div class="seg-toggle" id="statsRange">
+        <button class="active" data-range="week">Hafta</button>
+        <button data-range="month">Oy</button>
+      </div>
+      <div class="card-title" id="chartTitle">O'qilgan betlar</div>
+      <div class="chart" id="chartBars"></div>
+    </div>
+  </section>
+
+  <!-- ===================== SOZLAMALAR ===================== -->
+  <section id="view-settings" class="screen">
+    <h2 style="margin-bottom:16px;">Sozlamalar</h2>
+
+    <div class="settings-group">
+      <div class="settings-group-title">Akkaunt</div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-label" id="setAccountName">—</div>
+          <div class="settings-sub" id="setAccountType">Mehmon rejimi</div>
+        </div>
+        <button class="btn btn-danger btn-sm" id="btnLogout">Chiqish</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-title">Kunlik maqsad</div>
+      <div class="settings-item">
+        <div class="goal-edit-row" style="width:100%;">
+          <div class="settings-label">O'qish (bet)</div>
+          <div class="stepper">
+            <button id="goalPagesMinus">–</button>
+            <span class="val" id="goalPagesVal">3</span>
+            <button id="goalPagesPlus">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div class="goal-edit-row" style="width:100%;">
+          <div class="settings-label">Yodlash (oyat)</div>
+          <div class="stepper">
+            <button id="goalVersesMinus">–</button>
+            <span class="val" id="goalVersesVal">5</span>
+            <button id="goalVersesPlus">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-title">Ko'rinish</div>
+      <div class="settings-item">
+        <div class="settings-label">Tungi rejim (Dark mode)</div>
+        <label class="switch"><input type="checkbox" id="darkModeToggle"><span class="track"></span></label>
+      </div>
+      <div class="settings-item">
+        <div class="settings-label">Yozuv turi</div>
+        <select class="select" id="scriptSelect">
+          <option value="lotin">O'zbek (lotin)</option>
+          <option value="kirill">Ўзбек (кирилл)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-title">Ilova</div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-label">Ilova sifatida o'rnatish</div>
+          <div class="settings-sub">Bosh ekranga qo'shib, tezroq oching</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnInstall">O'rnatish</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="settings-group-title">Takliflar va aloqa</div>
+      <a class="link-row" href="#" id="linkTelegram" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 2.7 11.7c-1.2.5-1.2 1.2-.2 1.5l4.9 1.5 1.9 5.8c.2.6.4.8.9.8s.6-.2.9-.5l2.2-2.1 4.6 3.4c.8.5 1.4.2 1.6-.7l3-14.2c.3-1.2-.4-1.6-1.6-1.9zM8.2 14.1l9.5-6c.4-.3.8-.1.5.3l-7.9 7.3-.3 3.2z"/></svg>
+        <span>Telegram</span>
+        <span class="chev">›</span>
+      </a>
+      <a class="link-row" href="#" id="linkInstagram" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+        <span>Instagram</span>
+        <span class="chev">›</span>
+      </a>
+      <button class="link-row btn-block" id="btnDonate" style="width:100%; text-align:left; cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.35-9.5-8.8C.5 8.5 2.5 5 6 5c2 0 3.3 1 6 3.5C14.7 6 16 5 18 5c3.5 0 5.5 3.5 3.5 7.2C19 16.65 12 21 12 21z"/></svg>
+        <span>Loyihaga homiylik qilish</span>
+        <span class="chev">›</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav" id="bottomNav" style="display:none;">
+    <button class="nav-btn active" data-view="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      <span>Bosh sahifa</span>
+    </button>
+    <button class="nav-btn" data-view="stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      <span>Statistika</span>
+    </button>
+    <button class="nav-btn" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9c.2.7.7 1.2 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.6 1z"/></svg>
+      <span>Sozlamalar</span>
+    </button>
+  </nav>
+
+  <!-- Donate sheet -->
+  <div class="sheet-backdrop" id="donateSheetBackdrop">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h3>Loyihaga homiylik qilish</h3>
+      <p>QuranY ilovasini rivojlantirishda yordam bermoqchi bo'lsangiz, quyidagi manzil orqali murojaat qiling. Har qanday miqdordagi homiylik uchun rahmat!</p>
+      <div class="link-row" id="donateContact" style="cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3 2.7 11.7c-1.2.5-1.2 1.2-.2 1.5l4.9 1.5 1.9 5.8c.2.6.4.8.9.8s.6-.2.9-.5l2.2-2.1 4.6 3.4c.8.5 1.4.2 1.6-.7l3-14.2c.3-1.2-.4-1.6-1.6-1.9zM8.2 14.1l9.5-6c.4-.3.8-.1.5.3l-7.9 7.3-.3 3.2z"/></svg>
+        <span>Telegram orqali bog'lanish</span>
+      </div>
+      <button class="btn btn-ghost btn-block" id="btnDonateClose" style="margin-top:14px;">Yopish</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- Firebase (ixtiyoriy — sozlanmagan bo'lsa, ilova mahalliy rejimda ishlayveradi) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
