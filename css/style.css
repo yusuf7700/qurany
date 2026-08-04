@@ -85,7 +85,6 @@ img{max-width:100%; display:block;}
    Auth screen
    ========================================================= */
 #view-auth{
-  display:flex;
   flex-direction:column;
   justify-content:center;
   align-items:center;
@@ -97,6 +96,7 @@ img{max-width:100%; display:block;}
     var(--bg);
 }
 #view-auth.active{display:flex;}
+#view-onboarding.active{display:block;}
 .auth-logo{width:96px; height:96px; margin-bottom:18px;}
 .auth-title{font-size:30px; font-weight:800; color:var(--brand-700);}
 [data-theme="dark"] .auth-title{color:var(--brand-200);}
@@ -395,6 +395,53 @@ img{max-width:100%; display:block;}
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
 .empty-hint{text-align:center; color:var(--muted); font-size:13.5px; padding:20px 10px;}
+
+/* Weekday chips (memorization schedule picker) */
+.weekday-chips{display:flex; justify-content:space-between; gap:6px;}
+.chip{
+  width:38px; height:38px; border-radius:50%;
+  border:1.5px solid var(--border); background:var(--surface);
+  font-size:12px; font-weight:700; color:var(--muted); cursor:pointer;
+}
+.chip.active{
+  background:linear-gradient(135deg,var(--brand-400),var(--brand-700));
+  color:#fff; border-color:transparent;
+}
+.chart .bar-val{font-size:10.5px; font-weight:700; color:var(--muted);}
+
+.onboard-intro{color:var(--muted); font-size:13.5px; margin-bottom:18px;}
+
+/* =========================================================
+   Responsive: tablet & desktop — frame the app like a floating
+   device card instead of stretching a phone layout edge to edge.
+   ========================================================= */
+@media (min-width:680px){
+  body{
+    background:
+      radial-gradient(120% 60% at 50% 0%, var(--brand-100), transparent 60%),
+      var(--bg);
+    min-height:100vh;
+  }
+  #app{
+    max-width:460px;
+    margin:32px auto;
+    min-height:calc(100vh - 64px);
+    border-radius:32px;
+    box-shadow:0 30px 70px rgba(15,54,42,.18), 0 0 0 1px var(--border);
+    overflow:hidden;
+  }
+  [data-theme="dark"] #app{box-shadow:0 30px 70px rgba(0,0,0,.5), 0 0 0 1px var(--border);}
+  .bottom-nav{
+    max-width:460px;
+    border-radius:0 0 32px 32px;
+    bottom:32px;
+  }
+  #view-auth{min-height:calc(100vh - 64px); border-radius:32px;}
+}
+@media (min-width:960px){
+  #app{max-width:500px;}
+  .bottom-nav{max-width:500px;}
+}
 
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms !important; transition-duration:.001ms !important;}
