@@ -454,6 +454,7 @@ function renderStats() {
   }
   document.getElementById("statPagesTotal").textContent = totalPages;
   document.getElementById("statVersesTotal").textContent = totalVerses;
+  document.getElementById("statVersesLabel").textContent = L(`Jami yodlangan ${appData.goals.memoUnit}`);
 
   document.getElementById("chartTitle").textContent = L("O'qilgan betlar");
   const bars = document.getElementById("chartBars");
