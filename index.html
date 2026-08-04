@@ -39,6 +39,58 @@
     </div>
   </section>
 
+  <!-- ===================== ONBOARDING (birinchi sozlash) ===================== -->
+  <section id="view-onboarding" class="screen">
+    <h2>Sizga qulay tartibni sozlaymiz</h2>
+    <p class="onboard-intro">Bularni keyin ham Sozlamalar bo'limidan o'zgartirishingiz mumkin.</p>
+
+    <div class="card">
+      <div class="card-title">Kunlik o'qish maqsadi</div>
+      <div class="task-row">
+        <div class="task-info"><div class="task-name">📖 Necha bet o'qiysiz?</div></div>
+        <div class="stepper">
+          <button id="obPagesMinus">–</button>
+          <span class="val" id="obPagesVal">3</span>
+          <button id="obPagesPlus">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Yodlash kunlari</div>
+      <p style="color:var(--muted); font-size:12.5px; margin-bottom:10px;">Qaysi kunlari yodlashni rejalashtirasiz?</p>
+      <div class="weekday-chips" id="obWeekdayChips">
+        <button class="chip" data-day="1">Du</button>
+        <button class="chip" data-day="2">Se</button>
+        <button class="chip" data-day="3">Ch</button>
+        <button class="chip" data-day="4">Pa</button>
+        <button class="chip" data-day="5">Ju</button>
+        <button class="chip" data-day="6">Sh</button>
+        <button class="chip" data-day="0">Ya</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="obAllDays" style="margin-top:12px;">Har kuni</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Yodlash miqdori va birligi</div>
+      <div class="task-row">
+        <div class="task-info"><div class="task-name">🧠 Necha birlik?</div></div>
+        <div class="stepper">
+          <button id="obVersesMinus">–</button>
+          <span class="val" id="obVersesVal">5</span>
+          <button id="obVersesPlus">+</button>
+        </div>
+      </div>
+      <select class="select" id="obUnitSelect" style="width:100%; margin-top:14px;">
+        <option value="oyat">Oyat</option>
+        <option value="qator">Qator</option>
+        <option value="bet">Bet</option>
+      </select>
+    </div>
+
+    <button class="btn btn-primary btn-block" id="btnOnboardingDone">Boshlash</button>
+  </section>
+
   <!-- ===================== DASHBOARD ===================== -->
   <section id="view-dashboard" class="screen">
     <div class="topbar">
@@ -76,18 +128,21 @@
       </div>
       <div class="progress-track"><div class="progress-fill" id="pagesFill" style="width:0%"></div></div>
 
-      <div class="task-row" style="margin-top:18px;">
-        <div class="task-info">
-          <div class="task-name">🕋 Yodlash</div>
-          <div class="task-sub"><span id="versesDone">0</span> / <span id="versesGoal">5</span> oyat</div>
+      <div id="verseTaskBlock">
+        <div class="task-row" style="margin-top:18px;">
+          <div class="task-info">
+            <div class="task-name">🧠 Yodlash</div>
+            <div class="task-sub"><span id="versesDone">0</span> / <span id="versesGoal">5</span> <span id="versesUnit">oyat</span></div>
+          </div>
+          <div class="stepper">
+            <button id="versesMinus" aria-label="Kamaytirish">–</button>
+            <span class="val" id="versesVal">0</span>
+            <button id="versesPlus" aria-label="Ko'paytirish">+</button>
+          </div>
         </div>
-        <div class="stepper">
-          <button id="versesMinus" aria-label="Kamaytirish">–</button>
-          <span class="val" id="versesVal">0</span>
-          <button id="versesPlus" aria-label="Ko'paytirish">+</button>
-        </div>
+        <div class="progress-track"><div class="progress-fill" id="versesFill" style="width:0%"></div></div>
       </div>
-      <div class="progress-track"><div class="progress-fill" id="versesFill" style="width:0%"></div></div>
+      <p class="empty-hint" id="verseOffHint" style="display:none; padding:10px 0 0;">Bugun yodlash kuni emas — dam oling 🌿</p>
 
       <button class="btn btn-primary btn-block" id="btnSaveToday" style="margin-top:18px;">Bugungini saqlash</button>
       <div class="done-check" id="todayDoneHint" style="display:none;">
@@ -136,6 +191,13 @@
         </div>
         <button class="btn btn-danger btn-sm" id="btnLogout">Chiqish</button>
       </div>
+      <div class="settings-item" id="linkGoogleItem" style="display:none;">
+        <div>
+          <div class="settings-label">Google bilan ulash</div>
+          <div class="settings-sub">Ma'lumotlaringiz saqlanib qoladi</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnLinkGoogle">Ulash</button>
+      </div>
     </div>
 
     <div class="settings-group">
@@ -152,12 +214,32 @@
       </div>
       <div class="settings-item">
         <div class="goal-edit-row" style="width:100%;">
-          <div class="settings-label">Yodlash (oyat)</div>
+          <div class="settings-label">Yodlash miqdori</div>
           <div class="stepper">
             <button id="goalVersesMinus">–</button>
             <span class="val" id="goalVersesVal">5</span>
             <button id="goalVersesPlus">+</button>
           </div>
+        </div>
+      </div>
+      <div class="settings-item">
+        <div class="settings-label">Yodlash birligi</div>
+        <select class="select" id="goalUnitSelect">
+          <option value="oyat">Oyat</option>
+          <option value="qator">Qator</option>
+          <option value="bet">Bet</option>
+        </select>
+      </div>
+      <div class="settings-item" style="flex-direction:column; align-items:stretch;">
+        <div class="settings-label" style="margin-bottom:10px;">Yodlash kunlari</div>
+        <div class="weekday-chips" id="setWeekdayChips">
+          <button class="chip" data-day="1">Du</button>
+          <button class="chip" data-day="2">Se</button>
+          <button class="chip" data-day="3">Ch</button>
+          <button class="chip" data-day="4">Pa</button>
+          <button class="chip" data-day="5">Ju</button>
+          <button class="chip" data-day="6">Sh</button>
+          <button class="chip" data-day="0">Ya</button>
         </div>
       </div>
     </div>
@@ -185,6 +267,13 @@
           <div class="settings-sub">Bosh ekranga qo'shib, tezroq oching</div>
         </div>
         <button class="btn btn-ghost btn-sm" id="btnInstall">O'rnatish</button>
+      </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-label">Keshni tozalash</div>
+          <div class="settings-sub">Ilova yangilanishlarini majburan yuklaydi</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnClearCache">Tozalash</button>
       </div>
     </div>
 
@@ -245,6 +334,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
 
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
