@@ -22,7 +22,6 @@ try {
     fbAuth = firebase.auth();
     fbDb = firebase.firestore();
     firebaseReady = true;
-    if (firebase.analytics) { try { firebase.analytics(); } catch (e) {} }
   }
 } catch (e) {
   console.warn("Firebase sozlanmagan — mahalliy rejimda ishlaydi.", e);
@@ -225,16 +224,6 @@ function enterApp() {
   renderAll();
 }
 
-function tryRestoreSession() {
-  const saved = JSON.parse(localStorage.getItem("quranY_guest_session") || "null");
-  if (saved) {
-    currentUser = saved;
-    loadAppDataAndEnter();
-  } else {
-    showScreen("auth");
-  }
-}
-
 function logout() {
   if (firebaseReady && !currentUser.isGuest) {
     fbAuth.signOut().catch(() => {});
@@ -411,6 +400,24 @@ function bindDashboardEvents() {
 
 /* ---------- STATISTIKA --------------------------------------------------------*/
 let statsRange = "week";
+let statsMonthDate = new Date(); // joriy ko'rilayotgan oy (har doim shu oyning 1-kuni sifatida ishlatiladi)
+const MONTH_NAMES = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktyabr","Noyabr","Dekabr"];
+
+function getMonthBuckets(year, monthIndex) {
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const buckets = [];
+  for (let start = 1; start <= daysInMonth; start += 7) {
+    const end = Math.min(start + 6, daysInMonth);
+    let sum = 0;
+    for (let day = start; day <= end; day++) {
+      const key = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
+      sum += (appData.logs[key] && appData.logs[key].pages) || 0;
+    }
+    buckets.push({ label: `${start}-${end}`, value: sum });
+  }
+  return buckets;
+}
+
 function renderStats() {
   document.getElementById("statStreak").textContent = computeCurrentStreak();
   document.getElementById("statLongest").textContent = computeLongestStreak();
@@ -427,8 +434,11 @@ function renderStats() {
   const bars = document.getElementById("chartBars");
   bars.innerHTML = "";
 
+  const monthNav = document.getElementById("monthNav");
   let buckets = [];
+
   if (statsRange === "week") {
+    monthNav.style.display = "none";
     const today = new Date();
     for (let i = 6; i >= 0; i--) {
       const d = addDays(today, -i);
@@ -436,18 +446,14 @@ function renderStats() {
       buckets.push({ label: WEEKDAY_LABELS[d.getDay()], value: (appData.logs[key] && appData.logs[key].pages) || 0 });
     }
   } else {
-    const today = new Date();
-    for (let b = 4; b >= 0; b--) {
-      let sum = 0;
-      for (let i = b * 6; i < b * 6 + 6; i++) {
-        const d = addDays(today, -i);
-        const key = dateKey(d);
-        sum += (appData.logs[key] && appData.logs[key].pages) || 0;
-      }
-      const oldest = addDays(today, -(b * 6 + 5));
-      const newest = addDays(today, -(b * 6));
-      buckets.push({ label: `${oldest.getDate()}–${newest.getDate()}`, value: sum });
-    }
+    monthNav.style.display = "flex";
+    const y = statsMonthDate.getFullYear();
+    const m = statsMonthDate.getMonth();
+    document.getElementById("monthLabel").textContent = L(`${MONTH_NAMES[m]} ${y}`);
+    const now = new Date();
+    const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
+    document.getElementById("monthNext").disabled = isCurrentMonth;
+    buckets = getMonthBuckets(y, m);
   }
 
   const max = Math.max(1, ...buckets.map(b => b.value));
@@ -479,6 +485,18 @@ function bindStatsEvents() {
       document.querySelectorAll("#statsRange button").forEach(b => b.classList.toggle("active", b === btn));
       renderStats();
     });
+  });
+
+  document.getElementById("monthPrev").addEventListener("click", () => {
+    statsMonthDate = new Date(statsMonthDate.getFullYear(), statsMonthDate.getMonth() - 1, 1);
+    renderStats();
+  });
+  document.getElementById("monthNext").addEventListener("click", () => {
+    const now = new Date();
+    const next = new Date(statsMonthDate.getFullYear(), statsMonthDate.getMonth() + 1, 1);
+    if (next.getFullYear() > now.getFullYear() || (next.getFullYear() === now.getFullYear() && next.getMonth() > now.getMonth())) return;
+    statsMonthDate = next;
+    renderStats();
   });
 }
 
@@ -745,6 +763,8 @@ function registerSW() {
 }
 
 /* ---------- ISHGA TUSHIRISH ---------------------------------------------------------*/
+let sessionRestored = false;
+
 function init() {
   bindAuthEvents();
   bindOnboardingEvents();
@@ -756,14 +776,27 @@ function init() {
   setupInstallPrompt();
   registerSW();
 
+  // Tezkor yo'l: agar shu qurilmada mehmon sessiyasi bo'lsa, Firebase javobini
+  // kutmasdan darhol ilovaga kiritamiz (aks holda har safar 2-3 soniyalik kutish bo'lardi).
+  const savedGuest = JSON.parse(localStorage.getItem("quranY_guest_session") || "null");
+  if (savedGuest) {
+    currentUser = savedGuest;
+    sessionRestored = true;
+    loadAppDataAndEnter();
+  }
+
   if (firebaseReady) {
     fbAuth.onAuthStateChanged(user => {
       if (suppressAuthAutoHandle) return;
-      if (user) handleFirebaseUser(user);
-      else tryRestoreSession();
+      if (user) {
+        sessionRestored = true;
+        handleFirebaseUser(user);
+      } else if (!sessionRestored) {
+        showScreen("auth");
+      }
     });
-  } else {
-    tryRestoreSession();
+  } else if (!sessionRestored) {
+    showScreen("auth");
   }
 }
 
