@@ -176,6 +176,11 @@
       <div class="card-title" id="chartTitle">O'qilgan betlar</div>
       <div class="chart" id="chartBars"></div>
     </div>
+
+    <div class="card">
+      <div class="card-title">Kunlar tarixi</div>
+      <div id="historyList"></div>
+    </div>
   </section>
 
   <!-- ===================== SOZLAMALAR ===================== -->
@@ -312,6 +317,32 @@
       <span>Sozlamalar</span>
     </button>
   </nav>
+
+  <!-- Kunni tahrirlash sheeti -->
+  <div class="sheet-backdrop" id="dayEditBackdrop">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <h3 id="dayEditTitle">Kun</h3>
+      <div class="task-row">
+        <div class="task-info"><div class="task-name">📖 O'qish</div></div>
+        <div class="stepper">
+          <button id="dayPagesMinus">–</button>
+          <span class="val" id="dayPagesVal">0</span>
+          <button id="dayPagesPlus">+</button>
+        </div>
+      </div>
+      <div class="task-row" style="margin-top:14px;">
+        <div class="task-info"><div class="task-name">🧠 Yodlash</div></div>
+        <div class="stepper">
+          <button id="dayVersesMinus">–</button>
+          <span class="val" id="dayVersesVal">0</span>
+          <button id="dayVersesPlus">+</button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="btnDaySave" style="margin-top:18px;">Saqlash</button>
+      <button class="btn btn-ghost btn-block" id="btnDayCancel" style="margin-top:10px;">Bekor qilish</button>
+    </div>
+  </div>
 
   <!-- Donate sheet -->
   <div class="sheet-backdrop" id="donateSheetBackdrop">
