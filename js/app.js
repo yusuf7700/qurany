@@ -400,8 +400,33 @@ function bindDashboardEvents() {
 
 /* ---------- STATISTIKA --------------------------------------------------------*/
 let statsRange = "week";
+let statsWeekDate = new Date(); // shu haftadagi istalgan sana
 let statsMonthDate = new Date(); // joriy ko'rilayotgan oy (har doim shu oyning 1-kuni sifatida ishlatiladi)
 const MONTH_NAMES = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktyabr","Noyabr","Dekabr"];
+
+function getMondayOfWeek(d) {
+  const dow = d.getDay(); // 0=Yakshanba..6=Shanba
+  const diffFromMonday = (dow + 6) % 7;
+  const monday = addDays(d, -diffFromMonday);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+function getWeekBuckets(weekStart) {
+  const buckets = [];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(weekStart, i);
+    const key = dateKey(d);
+    buckets.push({ label: WEEKDAY_LABELS[d.getDay()], value: (appData.logs[key] && appData.logs[key].pages) || 0 });
+  }
+  return buckets;
+}
+function formatWeekLabel(weekStart) {
+  const weekEnd = addDays(weekStart, 6);
+  if (weekStart.getMonth() === weekEnd.getMonth()) {
+    return `${weekStart.getDate()}-${weekEnd.getDate()} ${MONTH_NAMES[weekStart.getMonth()]}`;
+  }
+  return `${weekStart.getDate()} ${MONTH_NAMES[weekStart.getMonth()]} - ${weekEnd.getDate()} ${MONTH_NAMES[weekEnd.getMonth()]}`;
+}
 
 function getMonthBuckets(year, monthIndex) {
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -435,17 +460,19 @@ function renderStats() {
   bars.innerHTML = "";
 
   const monthNav = document.getElementById("monthNav");
+  const weekNav = document.getElementById("weekNav");
   let buckets = [];
 
   if (statsRange === "week") {
     monthNav.style.display = "none";
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = addDays(today, -i);
-      const key = dateKey(d);
-      buckets.push({ label: WEEKDAY_LABELS[d.getDay()], value: (appData.logs[key] && appData.logs[key].pages) || 0 });
-    }
+    weekNav.style.display = "flex";
+    const weekStart = getMondayOfWeek(statsWeekDate);
+    document.getElementById("weekLabel").textContent = L(formatWeekLabel(weekStart));
+    const currentWeekStart = getMondayOfWeek(new Date());
+    document.getElementById("weekNext").disabled = weekStart.getTime() >= currentWeekStart.getTime();
+    buckets = getWeekBuckets(weekStart);
   } else {
+    weekNav.style.display = "none";
     monthNav.style.display = "flex";
     const y = statsMonthDate.getFullYear();
     const m = statsMonthDate.getMonth();
@@ -485,6 +512,18 @@ function bindStatsEvents() {
       document.querySelectorAll("#statsRange button").forEach(b => b.classList.toggle("active", b === btn));
       renderStats();
     });
+  });
+
+  document.getElementById("weekPrev").addEventListener("click", () => {
+    statsWeekDate = addDays(getMondayOfWeek(statsWeekDate), -7);
+    renderStats();
+  });
+  document.getElementById("weekNext").addEventListener("click", () => {
+    const currentWeekStart = getMondayOfWeek(new Date());
+    const nextStart = addDays(getMondayOfWeek(statsWeekDate), 7);
+    if (nextStart.getTime() > currentWeekStart.getTime()) return;
+    statsWeekDate = nextStart;
+    renderStats();
   });
 
   document.getElementById("monthPrev").addEventListener("click", () => {
