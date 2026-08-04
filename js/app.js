@@ -2,12 +2,8 @@
    QuranY — App logic
    ========================================================= */
 
-/* ---------- FIREBASE (ixtiyoriy) ----------------------------------------
-   Cross-device sinxronizatsiya uchun o'zingizning Firebase loyihangizni
-   ulang: https://console.firebase.google.com → Project settings → SDK config.
-   Google Sign-In provayderini yoqishni va Firestore'ni "test mode"da
-   yaratishni unutmang. Config to'ldirilmagan bo'lsa, ilova avtomatik
-   ravishda faqat shu qurilmada (mahalliy) ishlaydi.
+/* ---------- FIREBASE ------------------------------------------------------
+   Google Sign-In va qurilmalar aro sinxronizatsiya uchun.
 ------------------------------------------------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyDE6y2ZbXcc3YDPYM-IMwTQ5sZJuxKbcrA",
@@ -15,25 +11,24 @@ const firebaseConfig = {
   projectId: "qurany-7d105",
   storageBucket: "qurany-7d105.firebasestorage.app",
   messagingSenderId: "593144843405",
-  appId: "1:593144843405:web:db26cbcc5e105dea90a6c4"
+  appId: "1:593144843405:web:db26cbcc5e105dea90a6c4",
+  measurementId: "G-53D2SYKXZV"
 };
 
 let fbAuth = null, fbDb = null, firebaseReady = false;
 try {
-  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIzaSyDE6y2ZbXcc3YDPYM-IMwTQ5sZJuxKbcrA" && typeof firebase !== "undefined") {
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY" && typeof firebase !== "undefined") {
     firebase.initializeApp(firebaseConfig);
     fbAuth = firebase.auth();
     fbDb = firebase.firestore();
     firebaseReady = true;
+    if (firebase.analytics) { try { firebase.analytics(); } catch (e) {} }
   }
 } catch (e) {
   console.warn("Firebase sozlanmagan — mahalliy rejimda ishlaydi.", e);
 }
 
-/* ---------- KUNLIK TAKLIFLAR / DONAT HAVOLALARI -------------------------
-   O'zingizning Telegram/Instagram foydalanuvchi nomlaringizni shu yerga
-   qo'ying.
-------------------------------------------------------------------------- */
+/* ---------- TAKLIFLAR / DONAT HAVOLALARI --------------------------------*/
 const SOCIAL_LINKS = {
   telegram: "https://t.me/yuuvsuf",
   instagram: "https://instagram.com/yunusovvyusuf",
@@ -84,11 +79,13 @@ function dayOfYear(d) { const start = new Date(d.getFullYear(), 0, 0); return Ma
 
 const WEEKDAY_LABELS = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"]; // getDay(): 0=Yakshanba
 
-/* ---------- HOLAT (STATE) ----------------------------------------------- */
+/* ---------- HOLAT (STATE) ------------------------------------------------*/
 let currentUser = null;   // {uid, name, email, isGuest}
-let appData = null;       // {name, goals:{pages,verses}, logs:{date:{pages,verses}}, settings:{theme,script}}
+let appData = null;       // {name, goals:{pages,verses,memoUnit,memoDays}, logs, settings, onboarded}
 let draft = { pages: 0, verses: 0 };
+let obDraft = { pages: 3, verses: 5, unit: "oyat", days: [0,1,2,3,4,5,6] };
 let deferredInstallPrompt = null;
+let suppressAuthAutoHandle = false;
 
 const LS_PREFIX = "quranY_v1_";
 function loadLocal(uid) {
@@ -100,23 +97,35 @@ function saveLocalRaw(uid, data) {
 function defaultData(name) {
   return {
     name: name || "Do'stim",
-    goals: { pages: 3, verses: 5 },
+    goals: { pages: 3, verses: 5, memoUnit: "oyat", memoDays: [0,1,2,3,4,5,6] },
     logs: {},
-    settings: { theme: "light", script: "lotin" }
+    settings: { theme: "light", script: "lotin" },
+    onboarded: false
   };
+}
+function ensureDataShape(d) {
+  d.goals = d.goals || {};
+  if (d.goals.pages == null) d.goals.pages = 3;
+  if (d.goals.verses == null) d.goals.verses = 5;
+  if (!d.goals.memoUnit) d.goals.memoUnit = "oyat";
+  if (!d.goals.memoDays || !d.goals.memoDays.length) d.goals.memoDays = [0,1,2,3,4,5,6];
+  if (d.onboarded == null) d.onboarded = false;
+  d.settings = d.settings || { theme: "light", script: "lotin" };
+  d.logs = d.logs || {};
+  return d;
 }
 function mergeData(local, remote) {
   if (!remote) return local;
   const merged = Object.assign({}, remote);
   merged.logs = Object.assign({}, remote.logs || {});
-  // Mahalliy qurilmada bor-u, serverga hali sinxron bo'lmagan kunlarni qo'shib qo'yamiz
   if (local && local.logs) {
     for (const k in local.logs) {
       if (!merged.logs[k]) merged.logs[k] = local.logs[k];
     }
   }
-  merged.goals = remote.goals || (local && local.goals) || { pages: 3, verses: 5 };
+  merged.goals = remote.goals || (local && local.goals) || { pages: 3, verses: 5, memoUnit: "oyat", memoDays: [0,1,2,3,4,5,6] };
   merged.settings = remote.settings || (local && local.settings) || { theme: "light", script: "lotin" };
+  merged.onboarded = remote.onboarded != null ? remote.onboarded : (local && local.onboarded) || false;
   return merged;
 }
 function persist() {
@@ -126,7 +135,7 @@ function persist() {
   }
 }
 
-/* ---------- TOAST --------------------------------------------------------*/
+/* ---------- TOAST ---------------------------------------------------------*/
 let toastTimer = null;
 function toast(msg) {
   const el = document.getElementById("toast");
@@ -136,7 +145,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
 }
 
-/* ---------- EKRANLAR / NAVIGATSIYA --------------------------------------*/
+/* ---------- EKRANLAR / NAVIGATSIYA ----------------------------------------*/
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("view-" + name).classList.add("active");
@@ -144,7 +153,7 @@ function showScreen(name) {
   window.scrollTo(0, 0);
 }
 
-/* ---------- AUTENTIFIKATSIYA ---------------------------------------------*/
+/* ---------- AUTENTIFIKATSIYA -----------------------------------------------*/
 function bindAuthEvents() {
   document.getElementById("btnGoogle").addEventListener("click", async () => {
     if (!firebaseReady) {
@@ -174,6 +183,7 @@ function bindAuthEvents() {
 }
 
 async function handleFirebaseUser(user) {
+  if (suppressAuthAutoHandle) return;
   currentUser = { uid: user.uid, name: user.displayName || "Do'stim", email: user.email, isGuest: false };
   await loadAppDataAndEnter();
 }
@@ -195,8 +205,14 @@ async function loadAppDataAndEnter() {
       // Offline yoki Firestore mavjud emas — mahalliy nusxa bilan davom etamiz
     }
   }
+  ensureDataShape(appData);
   saveLocalRaw(currentUser.uid, appData);
-  enterApp();
+
+  if (!appData.onboarded) {
+    showOnboarding();
+  } else {
+    enterApp();
+  }
 }
 
 function enterApp() {
@@ -232,7 +248,54 @@ function logout() {
   showScreen("auth");
 }
 
-/* ---------- STREAK HISOBLASH ---------------------------------------------*/
+/* ---------- ONBOARDING (birinchi sozlash) ---------------------------------*/
+function showOnboarding() {
+  obDraft.pages = appData.goals.pages;
+  obDraft.verses = appData.goals.verses;
+  obDraft.unit = appData.goals.memoUnit;
+  obDraft.days = appData.goals.memoDays.slice();
+  updateOnboardingUI();
+  document.getElementById("bottomNav").style.display = "none";
+  showScreen("onboarding");
+}
+function updateOnboardingUI() {
+  document.getElementById("obPagesVal").textContent = obDraft.pages;
+  document.getElementById("obVersesVal").textContent = obDraft.verses;
+  document.getElementById("obUnitSelect").value = obDraft.unit;
+  document.querySelectorAll("#obWeekdayChips .chip").forEach(c => {
+    c.classList.toggle("active", obDraft.days.includes(Number(c.dataset.day)));
+  });
+}
+function bindOnboardingEvents() {
+  document.getElementById("obPagesPlus").addEventListener("click", () => { obDraft.pages = Math.min(50, obDraft.pages + 1); updateOnboardingUI(); });
+  document.getElementById("obPagesMinus").addEventListener("click", () => { obDraft.pages = Math.max(1, obDraft.pages - 1); updateOnboardingUI(); });
+  document.getElementById("obVersesPlus").addEventListener("click", () => { obDraft.verses = Math.min(50, obDraft.verses + 1); updateOnboardingUI(); });
+  document.getElementById("obVersesMinus").addEventListener("click", () => { obDraft.verses = Math.max(1, obDraft.verses - 1); updateOnboardingUI(); });
+  document.getElementById("obUnitSelect").addEventListener("change", (e) => { obDraft.unit = e.target.value; });
+  document.querySelectorAll("#obWeekdayChips .chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const day = Number(chip.dataset.day);
+      const idx = obDraft.days.indexOf(day);
+      if (idx >= 0) obDraft.days.splice(idx, 1); else obDraft.days.push(day);
+      updateOnboardingUI();
+    });
+  });
+  document.getElementById("obAllDays").addEventListener("click", () => {
+    obDraft.days = [0,1,2,3,4,5,6];
+    updateOnboardingUI();
+  });
+  document.getElementById("btnOnboardingDone").addEventListener("click", () => {
+    appData.goals.pages = obDraft.pages;
+    appData.goals.verses = obDraft.verses;
+    appData.goals.memoUnit = obDraft.unit;
+    appData.goals.memoDays = obDraft.days.length ? obDraft.days.slice() : [0,1,2,3,4,5,6];
+    appData.onboarded = true;
+    persist();
+    enterApp();
+  });
+}
+
+/* ---------- STREAK HISOBLASH -----------------------------------------------*/
 function isDayDone(key) {
   const log = appData.logs[key];
   return !!(log && log.pages >= appData.goals.pages);
@@ -261,13 +324,13 @@ function computeLongestStreak() {
   return longest;
 }
 
-/* ---------- KUNNING OYATI / HADISI ----------------------------------------*/
+/* ---------- KUNNING OYATI / HADISI -----------------------------------------*/
 function todayQuote() {
   const idx = dayOfYear(new Date()) % QURANY_QUOTES.length;
   return QURANY_QUOTES[idx];
 }
 
-/* ---------- DASHBOARD ------------------------------------------------------*/
+/* ---------- DASHBOARD -------------------------------------------------------*/
 function initDraftFromToday() {
   const log = appData.logs[todayKey()] || { pages: 0, verses: 0 };
   draft.pages = log.pages || 0;
@@ -290,7 +353,13 @@ function renderDashboard() {
 
   document.getElementById("pagesGoal").textContent = appData.goals.pages;
   document.getElementById("versesGoal").textContent = appData.goals.verses;
+  document.getElementById("versesUnit").textContent = L(appData.goals.memoUnit);
   updateDraftUI();
+
+  const todayDow = new Date().getDay();
+  const isMemoDay = appData.goals.memoDays.includes(todayDow);
+  document.getElementById("verseTaskBlock").style.display = isMemoDay ? "block" : "none";
+  document.getElementById("verseOffHint").style.display = isMemoDay ? "none" : "block";
 
   const streak = computeCurrentStreak();
   document.getElementById("streakNum").textContent = streak;
@@ -340,7 +409,7 @@ function bindDashboardEvents() {
   });
 }
 
-/* ---------- STATISTIKA -----------------------------------------------------*/
+/* ---------- STATISTIKA --------------------------------------------------------*/
 let statsRange = "week";
 function renderStats() {
   document.getElementById("statStreak").textContent = computeCurrentStreak();
@@ -367,7 +436,6 @@ function renderStats() {
       buckets.push({ label: WEEKDAY_LABELS[d.getDay()], value: (appData.logs[key] && appData.logs[key].pages) || 0 });
     }
   } else {
-    // Oy: joriy oyni ~6 kunlik 5 ta bo'lakka bo'lamiz
     const today = new Date();
     for (let b = 4; b >= 0; b--) {
       let sum = 0;
@@ -384,12 +452,16 @@ function renderStats() {
   buckets.forEach(b => {
     const wrap = document.createElement("div");
     wrap.className = "bar-wrap";
+    const val = document.createElement("div");
+    val.className = "bar-val";
+    val.textContent = b.value;
     const bar = document.createElement("div");
     bar.className = "bar";
     bar.style.height = Math.max(4, Math.round((b.value / max) * 100)) + "%";
     const lbl = document.createElement("div");
     lbl.className = "bar-lbl";
     lbl.textContent = L(b.label);
+    wrap.appendChild(val);
     wrap.appendChild(bar);
     wrap.appendChild(lbl);
     bars.appendChild(wrap);
@@ -406,12 +478,19 @@ function bindStatsEvents() {
   });
 }
 
-/* ---------- SOZLAMALAR ------------------------------------------------------*/
+/* ---------- SOZLAMALAR ---------------------------------------------------------*/
 function renderSettings() {
   document.getElementById("setAccountName").textContent = appData.name;
   document.getElementById("setAccountType").textContent = L(currentUser.isGuest ? "Mehmon rejimi (shu qurilmada saqlanadi)" : "Google akkaunt bilan ulangan");
+  document.getElementById("linkGoogleItem").style.display = currentUser.isGuest ? "flex" : "none";
+
   document.getElementById("goalPagesVal").textContent = appData.goals.pages;
   document.getElementById("goalVersesVal").textContent = appData.goals.verses;
+  document.getElementById("goalUnitSelect").value = appData.goals.memoUnit;
+  document.querySelectorAll("#setWeekdayChips .chip").forEach(c => {
+    c.classList.toggle("active", appData.goals.memoDays.includes(Number(c.dataset.day)));
+  });
+
   document.getElementById("darkModeToggle").checked = appData.settings.theme === "dark";
   document.getElementById("linkTelegram").href = SOCIAL_LINKS.telegram;
   document.getElementById("linkInstagram").href = SOCIAL_LINKS.instagram;
@@ -422,10 +501,30 @@ function applyTheme(theme) {
 }
 
 function bindSettingsEvents() {
-  document.getElementById("goalPagesPlus").addEventListener("click", () => { appData.goals.pages = Math.min(50, appData.goals.pages + 1); persist(); renderSettings(); });
-  document.getElementById("goalPagesMinus").addEventListener("click", () => { appData.goals.pages = Math.max(1, appData.goals.pages - 1); persist(); renderSettings(); });
-  document.getElementById("goalVersesPlus").addEventListener("click", () => { appData.goals.verses = Math.min(50, appData.goals.verses + 1); persist(); renderSettings(); });
-  document.getElementById("goalVersesMinus").addEventListener("click", () => { appData.goals.verses = Math.max(1, appData.goals.verses - 1); persist(); renderSettings(); });
+  document.getElementById("goalPagesPlus").addEventListener("click", () => { appData.goals.pages = Math.min(50, appData.goals.pages + 1); persist(); renderSettings(); renderDashboard(); });
+  document.getElementById("goalPagesMinus").addEventListener("click", () => { appData.goals.pages = Math.max(1, appData.goals.pages - 1); persist(); renderSettings(); renderDashboard(); });
+  document.getElementById("goalVersesPlus").addEventListener("click", () => { appData.goals.verses = Math.min(50, appData.goals.verses + 1); persist(); renderSettings(); renderDashboard(); });
+  document.getElementById("goalVersesMinus").addEventListener("click", () => { appData.goals.verses = Math.max(1, appData.goals.verses - 1); persist(); renderSettings(); renderDashboard(); });
+
+  document.getElementById("goalUnitSelect").addEventListener("change", (e) => {
+    appData.goals.memoUnit = e.target.value;
+    persist();
+    renderSettings();
+    renderDashboard();
+  });
+
+  document.querySelectorAll("#setWeekdayChips .chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const day = Number(chip.dataset.day);
+      const days = appData.goals.memoDays.slice();
+      const idx = days.indexOf(day);
+      if (idx >= 0) days.splice(idx, 1); else days.push(day);
+      appData.goals.memoDays = days.length ? days : [0,1,2,3,4,5,6];
+      persist();
+      renderSettings();
+      renderDashboard();
+    });
+  });
 
   document.getElementById("darkModeToggle").addEventListener("change", (e) => {
     appData.settings.theme = e.target.checked ? "dark" : "light";
@@ -442,6 +541,35 @@ function bindSettingsEvents() {
 
   document.getElementById("btnLogout").addEventListener("click", logout);
 
+  document.getElementById("btnLinkGoogle").addEventListener("click", async () => {
+    if (!firebaseReady) { toast("Google ulash hozircha sozlanmagan."); return; }
+    suppressAuthAutoHandle = true;
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      const result = await fbAuth.signInWithPopup(provider);
+      const user = result.user;
+      const guestData = appData;
+      let finalData = guestData;
+      if (fbDb) {
+        try {
+          const snap = await fbDb.collection("users").doc(user.uid).get();
+          if (snap.exists) finalData = mergeData(guestData, snap.data());
+        } catch (e) {}
+      }
+      currentUser = { uid: user.uid, name: user.displayName || guestData.name, email: user.email, isGuest: false };
+      appData = finalData;
+      ensureDataShape(appData);
+      localStorage.removeItem("quranY_guest_session");
+      persist();
+      renderAll();
+      toast("Google akkaunt ulandi — ma'lumotlaringiz saqlandi!");
+    } catch (e) {
+      toast("Ulashda xatolik yuz berdi.");
+    } finally {
+      setTimeout(() => { suppressAuthAutoHandle = false; }, 800);
+    }
+  });
+
   document.getElementById("btnInstall").addEventListener("click", async () => {
     if (deferredInstallPrompt) {
       deferredInstallPrompt.prompt();
@@ -450,6 +578,23 @@ function bindSettingsEvents() {
       if (choice.outcome === "accepted") toast("Ilova o'rnatilmoqda...");
     } else {
       toast("Bu qurilmada avtomatik o'rnatish mavjud emas. Brauzer menyusidan \"Bosh ekranga qo'shish\"ni tanlang.");
+    }
+  });
+
+  document.getElementById("btnClearCache").addEventListener("click", async () => {
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      toast("Kesh tozalandi, sahifa yangilanmoqda...");
+      setTimeout(() => location.reload(), 900);
+    } catch (e) {
+      toast("Keshni tozalashda xatolik yuz berdi.");
     }
   });
 
@@ -467,7 +612,7 @@ function bindSettingsEvents() {
   });
 }
 
-/* ---------- I18N (LOTIN/KIRILL) STATIK MATNLAR ----------------------------*/
+/* ---------- I18N (LOTIN/KIRILL) STATIK MATNLAR --------------------------------*/
 function tagLeaves() {
   const all = document.querySelectorAll("#app *");
   all.forEach(el => {
@@ -485,7 +630,7 @@ function applyScriptToStatics(script) {
   });
 }
 
-/* ---------- NAV ---------------------------------------------------------- */
+/* ---------- NAV -----------------------------------------------------------------*/
 function bindNav() {
   document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -504,7 +649,7 @@ function renderAll() {
   renderSettings();
 }
 
-/* ---------- PWA: O'RNATISH VA SERVICE WORKER ------------------------------*/
+/* ---------- PWA: O'RNATISH VA SERVICE WORKER --------------------------------------*/
 function setupInstallPrompt() {
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
@@ -519,9 +664,10 @@ function registerSW() {
   }
 }
 
-/* ---------- ISHGA TUSHIRISH ------------------------------------------------*/
+/* ---------- ISHGA TUSHIRISH ---------------------------------------------------------*/
 function init() {
   bindAuthEvents();
+  bindOnboardingEvents();
   bindNav();
   bindDashboardEvents();
   bindStatsEvents();
@@ -531,6 +677,7 @@ function init() {
 
   if (firebaseReady) {
     fbAuth.onAuthStateChanged(user => {
+      if (suppressAuthAutoHandle) return;
       if (user) handleFirebaseUser(user);
       else tryRestoreSession();
     });
