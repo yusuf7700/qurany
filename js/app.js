@@ -444,7 +444,9 @@ function renderStats() {
         const key = dateKey(d);
         sum += (appData.logs[key] && appData.logs[key].pages) || 0;
       }
-      buckets.push({ label: (5 - b) + "", value: sum });
+      const oldest = addDays(today, -(b * 6 + 5));
+      const newest = addDays(today, -(b * 6));
+      buckets.push({ label: `${oldest.getDate()}–${newest.getDate()}`, value: sum });
     }
   }
 
@@ -466,6 +468,8 @@ function renderStats() {
     wrap.appendChild(lbl);
     bars.appendChild(wrap);
   });
+
+  renderHistoryList();
 }
 
 function bindStatsEvents() {
@@ -475,6 +479,82 @@ function bindStatsEvents() {
       document.querySelectorAll("#statsRange button").forEach(b => b.classList.toggle("active", b === btn));
       renderStats();
     });
+  });
+}
+
+/* ---------- KUNLAR TARIXI VA TAHRIRLASH ---------------------------------------*/
+function formatDayLabel(d, i) {
+  if (i === 0) return "Bugun";
+  if (i === 1) return "Kecha";
+  return `${d.getDate()}.${pad(d.getMonth() + 1)} (${WEEKDAY_LABELS[d.getDay()]})`;
+}
+function renderHistoryList() {
+  const wrap = document.getElementById("historyList");
+  wrap.innerHTML = "";
+  const today = new Date();
+  for (let i = 0; i < 14; i++) {
+    const d = addDays(today, -i);
+    const key = dateKey(d);
+    const log = appData.logs[key];
+
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const dateDiv = document.createElement("div");
+    dateDiv.className = "history-date";
+    dateDiv.textContent = L(formatDayLabel(d, i));
+
+    const valsDiv = document.createElement("div");
+    valsDiv.className = "history-vals";
+    const pagesVal = (log && log.pages) || 0;
+    const versesVal = (log && log.verses) || 0;
+    valsDiv.textContent = `${pagesVal} ${L("bet")} · ${versesVal} ${L(appData.goals.memoUnit)}`;
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "history-edit";
+    editBtn.textContent = "✎";
+    editBtn.addEventListener("click", () => openDayEdit(key, formatDayLabel(d, i)));
+
+    row.appendChild(dateDiv);
+    row.appendChild(valsDiv);
+    row.appendChild(editBtn);
+    wrap.appendChild(row);
+  }
+}
+
+let dayEditDraft = { key: null, pages: 0, verses: 0 };
+function openDayEdit(key, label) {
+  dayEditDraft.key = key;
+  const log = appData.logs[key] || { pages: 0, verses: 0 };
+  dayEditDraft.pages = log.pages || 0;
+  dayEditDraft.verses = log.verses || 0;
+  document.getElementById("dayEditTitle").textContent = L(label);
+  updateDayEditUI();
+  document.getElementById("dayEditBackdrop").classList.add("open");
+}
+function updateDayEditUI() {
+  document.getElementById("dayPagesVal").textContent = dayEditDraft.pages;
+  document.getElementById("dayVersesVal").textContent = dayEditDraft.verses;
+}
+function bindDayEditEvents() {
+  document.getElementById("dayPagesPlus").addEventListener("click", () => { dayEditDraft.pages = Math.min(99, dayEditDraft.pages + 1); updateDayEditUI(); });
+  document.getElementById("dayPagesMinus").addEventListener("click", () => { dayEditDraft.pages = Math.max(0, dayEditDraft.pages - 1); updateDayEditUI(); });
+  document.getElementById("dayVersesPlus").addEventListener("click", () => { dayEditDraft.verses = Math.min(99, dayEditDraft.verses + 1); updateDayEditUI(); });
+  document.getElementById("dayVersesMinus").addEventListener("click", () => { dayEditDraft.verses = Math.max(0, dayEditDraft.verses - 1); updateDayEditUI(); });
+
+  document.getElementById("btnDaySave").addEventListener("click", () => {
+    appData.logs[dayEditDraft.key] = { pages: dayEditDraft.pages, verses: dayEditDraft.verses };
+    persist();
+    document.getElementById("dayEditBackdrop").classList.remove("open");
+    renderStats();
+    if (dayEditDraft.key === todayKey()) { initDraftFromToday(); renderDashboard(); }
+    toast("Kun yangilandi!");
+  });
+  document.getElementById("btnDayCancel").addEventListener("click", () => {
+    document.getElementById("dayEditBackdrop").classList.remove("open");
+  });
+  document.getElementById("dayEditBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "dayEditBackdrop") e.currentTarget.classList.remove("open");
   });
 }
 
@@ -672,6 +752,7 @@ function init() {
   bindDashboardEvents();
   bindStatsEvents();
   bindSettingsEvents();
+  bindDayEditEvents();
   setupInstallPrompt();
   registerSW();
 
