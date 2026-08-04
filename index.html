@@ -173,6 +173,11 @@
         <button class="active" data-range="week">Hafta</button>
         <button data-range="month">Oy</button>
       </div>
+      <div class="month-nav" id="monthNav" style="display:none;">
+        <button id="monthPrev" aria-label="Oldingi oy">‹</button>
+        <span id="monthLabel">Avgust 2026</span>
+        <button id="monthNext" aria-label="Keyingi oy">›</button>
+      </div>
       <div class="card-title" id="chartTitle">O'qilgan betlar</div>
       <div class="chart" id="chartBars"></div>
     </div>
@@ -362,12 +367,11 @@
 </div>
 
 <!-- Firebase (ixtiyoriy — sozlanmagan bo'lsa, ilova mahalliy rejimda ishlayveradi) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
 
-<script src="js/data.js"></script>
-<script src="js/app.js"></script>
+<script src="js/data.js" defer></script>
+<script src="js/app.js" defer></script>
 </body>
 </html>
