@@ -98,6 +98,8 @@ function defaultData(name) {
     name: name || "Do'stim",
     goals: { pages: 3, verses: 5, memoUnit: "oyat", memoDays: [0,1,2,3,4,5,6] },
     logs: {},
+    frozenDays: [],
+    lastCelebratedStreak: 0,
     settings: { theme: "light", script: "lotin" },
     onboarded: false
   };
@@ -109,6 +111,8 @@ function ensureDataShape(d) {
   if (!d.goals.memoUnit) d.goals.memoUnit = "oyat";
   if (!d.goals.memoDays || !d.goals.memoDays.length) d.goals.memoDays = [0,1,2,3,4,5,6];
   if (d.onboarded == null) d.onboarded = false;
+  if (!d.frozenDays) d.frozenDays = [];
+  if (d.lastCelebratedStreak == null) d.lastCelebratedStreak = 0;
   d.settings = d.settings || { theme: "light", script: "lotin" };
   d.logs = d.logs || {};
   return d;
@@ -122,6 +126,10 @@ function mergeData(local, remote) {
       if (!merged.logs[k]) merged.logs[k] = local.logs[k];
     }
   }
+  const remoteFrozen = remote.frozenDays || [];
+  const localFrozen = (local && local.frozenDays) || [];
+  merged.frozenDays = Array.from(new Set([...remoteFrozen, ...localFrozen]));
+  merged.lastCelebratedStreak = remote.lastCelebratedStreak != null ? remote.lastCelebratedStreak : (local && local.lastCelebratedStreak) || 0;
   merged.goals = remote.goals || (local && local.goals) || { pages: 3, verses: 5, memoUnit: "oyat", memoDays: [0,1,2,3,4,5,6] };
   merged.settings = remote.settings || (local && local.settings) || { theme: "light", script: "lotin" };
   merged.onboarded = remote.onboarded != null ? remote.onboarded : (local && local.onboarded) || false;
@@ -287,7 +295,12 @@ function bindOnboardingEvents() {
 /* ---------- STREAK HISOBLASH -----------------------------------------------*/
 function isDayDone(key) {
   const log = appData.logs[key];
-  return !!(log && log.pages >= appData.goals.pages);
+  const doneByLog = !!(log && log.pages >= appData.goals.pages);
+  const frozen = appData.frozenDays && appData.frozenDays.includes(key);
+  return doneByLog || frozen;
+}
+function freezesUsedInMonth(monthKey) {
+  return (appData.frozenDays || []).filter(k => k.startsWith(monthKey)).length;
 }
 function computeCurrentStreak() {
   let cursor = new Date();
@@ -377,8 +390,13 @@ function renderWeekBeads() {
   for (let i = 6; i >= 0; i--) {
     const d = addDays(today, -i);
     const key = dateKey(d);
+    const frozen = appData.frozenDays.includes(key);
     const bead = document.createElement("div");
-    bead.className = "bead" + (isDayDone(key) ? " filled" : "") + (i === 0 ? " today" : "");
+    let cls = "bead";
+    if (frozen) cls += " frozen";
+    else if (isDayDone(key)) cls += " filled";
+    if (i === 0) cls += " today";
+    bead.className = cls;
     bead.textContent = L(WEEKDAY_LABELS[d.getDay()]);
     wrap.appendChild(bead);
   }
@@ -395,7 +413,19 @@ function bindDashboardEvents() {
     persist();
     renderDashboard();
     toast("Bugungi natija saqlandi!");
+    checkMilestone();
   });
+}
+
+const STREAK_MILESTONES = [3, 7, 15, 30, 50, 100, 180, 365];
+function checkMilestone() {
+  const streak = computeCurrentStreak();
+  if (STREAK_MILESTONES.includes(streak) && appData.lastCelebratedStreak !== streak) {
+    appData.lastCelebratedStreak = streak;
+    persist();
+    document.getElementById("milestoneTitle").textContent = L(`${streak} kunlik streak!`);
+    document.getElementById("milestoneSheetBackdrop").classList.add("open");
+  }
 }
 
 /* ---------- STATISTIKA --------------------------------------------------------*/
@@ -504,6 +534,7 @@ function renderStats() {
   });
 
   renderHistoryList();
+  renderRecap();
 }
 
 function bindStatsEvents() {
@@ -554,19 +585,22 @@ function renderHistoryList() {
     const d = addDays(today, -i);
     const key = dateKey(d);
     const log = appData.logs[key];
+    const frozen = appData.frozenDays.includes(key);
 
     const row = document.createElement("div");
     row.className = "history-row";
 
     const dateDiv = document.createElement("div");
     dateDiv.className = "history-date";
-    dateDiv.textContent = L(formatDayLabel(d, i));
+    dateDiv.textContent = L(formatDayLabel(d, i)) + (frozen ? " ❄" : "");
 
     const valsDiv = document.createElement("div");
     valsDiv.className = "history-vals";
     const pagesVal = (log && log.pages) || 0;
     const versesVal = (log && log.verses) || 0;
-    valsDiv.textContent = `${pagesVal} ${L("bet")} · ${versesVal} ${L(appData.goals.memoUnit)}`;
+    valsDiv.textContent = frozen && pagesVal === 0
+      ? L("Muzlatilgan")
+      : `${pagesVal} ${L("bet")} · ${versesVal} ${L(appData.goals.memoUnit)}`;
 
     const editBtn = document.createElement("button");
     editBtn.className = "history-edit";
@@ -580,19 +614,30 @@ function renderHistoryList() {
   }
 }
 
-let dayEditDraft = { key: null, pages: 0, verses: 0 };
+let dayEditDraft = { key: null, pages: 0, verses: 0, frozen: false };
 function openDayEdit(key, label) {
   dayEditDraft.key = key;
   const log = appData.logs[key] || { pages: 0, verses: 0 };
   dayEditDraft.pages = log.pages || 0;
   dayEditDraft.verses = log.verses || 0;
+  dayEditDraft.frozen = appData.frozenDays.includes(key);
   document.getElementById("dayEditTitle").textContent = L(label);
   updateDayEditUI();
+  updateFreezeUI();
   document.getElementById("dayEditBackdrop").classList.add("open");
 }
 function updateDayEditUI() {
   document.getElementById("dayPagesVal").textContent = dayEditDraft.pages;
   document.getElementById("dayVersesVal").textContent = dayEditDraft.verses;
+}
+function updateFreezeUI() {
+  const monthKey = dayEditDraft.key.slice(0, 7);
+  const used = freezesUsedInMonth(monthKey);
+  const available = dayEditDraft.frozen || used < 1;
+  document.getElementById("freezeToggle").checked = dayEditDraft.frozen;
+  document.getElementById("freezeSub").textContent = L(
+    dayEditDraft.frozen ? "Bu kun uchun muzlatilgan" : (available ? "Bu oy uchun mavjud (oyiga 1 marta)" : "Bu oy uchun ishlatib bo'lingan")
+  );
 }
 function bindDayEditEvents() {
   document.getElementById("dayPagesPlus").addEventListener("click", () => { dayEditDraft.pages = Math.min(99, dayEditDraft.pages + 1); updateDayEditUI(); });
@@ -600,8 +645,27 @@ function bindDayEditEvents() {
   document.getElementById("dayVersesPlus").addEventListener("click", () => { dayEditDraft.verses = Math.min(99, dayEditDraft.verses + 1); updateDayEditUI(); });
   document.getElementById("dayVersesMinus").addEventListener("click", () => { dayEditDraft.verses = Math.max(0, dayEditDraft.verses - 1); updateDayEditUI(); });
 
+  document.getElementById("freezeToggle").addEventListener("change", (e) => {
+    const monthKey = dayEditDraft.key.slice(0, 7);
+    if (e.target.checked) {
+      const used = freezesUsedInMonth(monthKey);
+      if (!dayEditDraft.frozen && used >= 1) {
+        e.target.checked = false;
+        toast("Bu oy uchun muzlatish limiti tugagan (oyiga 1 marta).");
+        return;
+      }
+      dayEditDraft.frozen = true;
+    } else {
+      dayEditDraft.frozen = false;
+    }
+    updateFreezeUI();
+  });
+
   document.getElementById("btnDaySave").addEventListener("click", () => {
     appData.logs[dayEditDraft.key] = { pages: dayEditDraft.pages, verses: dayEditDraft.verses };
+    const idx = appData.frozenDays.indexOf(dayEditDraft.key);
+    if (dayEditDraft.frozen && idx === -1) appData.frozenDays.push(dayEditDraft.key);
+    if (!dayEditDraft.frozen && idx !== -1) appData.frozenDays.splice(idx, 1);
     persist();
     document.getElementById("dayEditBackdrop").classList.remove("open");
     renderStats();
@@ -613,6 +677,153 @@ function bindDayEditEvents() {
   });
   document.getElementById("dayEditBackdrop").addEventListener("click", (e) => {
     if (e.target.id === "dayEditBackdrop") e.currentTarget.classList.remove("open");
+  });
+}
+
+/* ---------- XULOSA (RECAP) VA NATIJALARNI ULASHISH -------------------------------*/
+function renderRecap() {
+  const lastWeekStart = addDays(getMondayOfWeek(new Date()), -7);
+  const wBuckets = getWeekBuckets(lastWeekStart);
+  const wTotal = wBuckets.reduce((s, b) => s + b.value, 0);
+  let wDaysDone = 0;
+  for (let i = 0; i < 7; i++) { if (isDayDone(dateKey(addDays(lastWeekStart, i)))) wDaysDone++; }
+  document.getElementById("recapWeekText").textContent = L(`${wTotal} bet o'qidingiz, ${wDaysDone}/7 kun bajarildi`);
+
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const mBuckets = getMonthBuckets(lastMonth.getFullYear(), lastMonth.getMonth());
+  const mTotal = mBuckets.reduce((s, b) => s + b.value, 0);
+  document.getElementById("recapMonthText").textContent = L(`${MONTH_NAMES[lastMonth.getMonth()]} oyida ${mTotal} bet o'qidingiz`);
+}
+
+function buildShareCanvas(opts) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1080;
+  const ctx = canvas.getContext("2d");
+
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, "#1B4D3B");
+  grad.addColorStop(1, "#0B241B");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.beginPath();
+  ctx.arc(950, 130, 280, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  ctx.fill();
+
+  ctx.fillStyle = "#EFFAF3";
+  ctx.font = "800 56px Manrope, sans-serif";
+  ctx.fillText("QuranY", 72, 140);
+  ctx.font = "500 30px Inter, sans-serif";
+  ctx.fillStyle = "#A7DABE";
+  ctx.fillText("Har kuni Qur'on bilan", 72, 182);
+
+  ctx.font = "800 230px Manrope, sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(opts.headline, 72, 470);
+
+  ctx.font = "700 42px Manrope, sans-serif";
+  ctx.fillStyle = "#C9A24B";
+  ctx.fillText(L(opts.headlineLabel), 72, 525);
+
+  ctx.font = "500 34px Inter, sans-serif";
+  ctx.fillStyle = "#EFFAF3";
+  let y = 610;
+  (opts.lines || []).forEach(line => {
+    ctx.fillText(L(line), 72, y);
+    y += 52;
+  });
+
+  ctx.font = "600 30px Inter, sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(appData.name, 72, 990);
+  ctx.font = "400 24px Inter, sans-serif";
+  ctx.fillStyle = "#8FA79B";
+  ctx.fillText(L("QuranY ilovasi bilan"), 72, 1030);
+
+  return canvas;
+}
+
+function shareOrDownloadCanvas(canvas, shareText) {
+  canvas.toBlob(async (blob) => {
+    if (!blob) { toast("Rasm yaratishda xatolik yuz berdi."); return; }
+    const file = new File([blob], "qurany-natija.png", { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "QuranY", text: shareText });
+        return;
+      } catch (e) {
+        // Foydalanuvchi bekor qilgan bo'lishi mumkin — pastdagi yuklab olish fallback ishlaydi
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "qurany-natija.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("Rasm yuklab olindi — Instagram yoki Telegramda ulashing!");
+  }, "image/png");
+}
+
+function shareStreakCard() {
+  const streak = computeCurrentStreak();
+  let totalPages = 0, totalVerses = 0;
+  for (const k in appData.logs) {
+    totalPages += appData.logs[k].pages || 0;
+    totalVerses += appData.logs[k].verses || 0;
+  }
+  const canvas = buildShareCanvas({
+    headline: String(streak),
+    headlineLabel: "kunlik streak 🔥",
+    lines: [`📖 Jami ${totalPages} bet o'qilgan`, `🧠 Jami ${totalVerses} ${appData.goals.memoUnit} yodlangan`]
+  });
+  shareOrDownloadCanvas(canvas, `Men QuranY'da ${streak} kunlik streakdaman! 🔥`);
+}
+
+function shareWeekRecap() {
+  const lastWeekStart = addDays(getMondayOfWeek(new Date()), -7);
+  const wBuckets = getWeekBuckets(lastWeekStart);
+  const wTotal = wBuckets.reduce((s, b) => s + b.value, 0);
+  let wDaysDone = 0;
+  for (let i = 0; i < 7; i++) { if (isDayDone(dateKey(addDays(lastWeekStart, i)))) wDaysDone++; }
+  const streak = computeCurrentStreak();
+  const canvas = buildShareCanvas({
+    headline: String(wTotal),
+    headlineLabel: "bet — o'tgan hafta",
+    lines: [`${wDaysDone}/7 kun bajarildi`, `Joriy streak: ${streak} kun 🔥`]
+  });
+  shareOrDownloadCanvas(canvas, `O'tgan hafta QuranY'da ${wTotal} bet o'qidim! 📖`);
+}
+
+function shareMonthRecap() {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const mBuckets = getMonthBuckets(lastMonth.getFullYear(), lastMonth.getMonth());
+  const mTotal = mBuckets.reduce((s, b) => s + b.value, 0);
+  const streak = computeCurrentStreak();
+  const canvas = buildShareCanvas({
+    headline: String(mTotal),
+    headlineLabel: `bet — ${MONTH_NAMES[lastMonth.getMonth()]} oyi`,
+    lines: [`Joriy streak: ${streak} kun 🔥`]
+  });
+  shareOrDownloadCanvas(canvas, `${MONTH_NAMES[lastMonth.getMonth()]} oyida QuranY'da ${mTotal} bet o'qidim! 📖`);
+}
+
+function bindShareEvents() {
+  document.getElementById("btnShareStats").addEventListener("click", shareStreakCard);
+  document.getElementById("btnShareWeek").addEventListener("click", shareWeekRecap);
+  document.getElementById("btnShareMonth").addEventListener("click", shareMonthRecap);
+  document.getElementById("btnMilestoneShare").addEventListener("click", shareStreakCard);
+  document.getElementById("btnMilestoneClose").addEventListener("click", () => {
+    document.getElementById("milestoneSheetBackdrop").classList.remove("open");
+  });
+  document.getElementById("milestoneSheetBackdrop").addEventListener("click", (e) => {
+    if (e.target.id === "milestoneSheetBackdrop") e.currentTarget.classList.remove("open");
   });
 }
 
@@ -813,6 +1024,7 @@ function init() {
   bindStatsEvents();
   bindSettingsEvents();
   bindDayEditEvents();
+  bindShareEvents();
   setupInstallPrompt();
   registerSW();
 
