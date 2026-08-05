@@ -169,6 +169,24 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Xulosa</div>
+      <div class="recap-row">
+        <div>
+          <div class="recap-label">O'tgan hafta</div>
+          <div class="recap-value" id="recapWeekText">—</div>
+        </div>
+        <button class="history-edit" id="btnShareWeek" title="Ulashish">📤</button>
+      </div>
+      <div class="recap-row">
+        <div>
+          <div class="recap-label">O'tgan oy</div>
+          <div class="recap-value" id="recapMonthText">—</div>
+        </div>
+        <button class="history-edit" id="btnShareMonth" title="Ulashish">📤</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="seg-toggle" id="statsRange">
         <button class="active" data-range="week">Hafta</button>
         <button data-range="month">Oy</button>
@@ -190,6 +208,12 @@
     <div class="card">
       <div class="card-title">Kunlar tarixi</div>
       <div id="historyList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Natijalarni ulashish</div>
+      <p style="color:var(--muted); font-size:13px; margin-bottom:14px;">Streak va statistikangizni chiroyli rasm sifatida do'stlaringizga ulashing.</p>
+      <button class="btn btn-primary btn-block" id="btnShareStats">📤 Ulashish</button>
     </div>
   </section>
 
@@ -349,8 +373,29 @@
           <button id="dayVersesPlus">+</button>
         </div>
       </div>
+
+      <div class="settings-item" id="freezeRow" style="margin-top:16px;">
+        <div>
+          <div class="settings-label">❄️ Kunni muzlatish</div>
+          <div class="settings-sub" id="freezeSub">Bu oy uchun mavjud</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="freezeToggle"><span class="track"></span></label>
+      </div>
+
       <button class="btn btn-primary btn-block" id="btnDaySave" style="margin-top:18px;">Saqlash</button>
       <button class="btn btn-ghost btn-block" id="btnDayCancel" style="margin-top:10px;">Bekor qilish</button>
+    </div>
+  </div>
+
+  <!-- Streak muzlatish/olib tashlash bildirishi (celebratsiya) -->
+  <div class="sheet-backdrop" id="milestoneSheetBackdrop">
+    <div class="sheet" style="text-align:center;">
+      <div class="sheet-handle"></div>
+      <div style="font-size:46px; margin-bottom:6px;">🎉</div>
+      <h3 id="milestoneTitle">7 kunlik streak!</h3>
+      <p>Davom eting, bu ajoyib natija!</p>
+      <button class="btn btn-primary btn-block" id="btnMilestoneShare" style="margin-top:10px;">📤 Ulashish</button>
+      <button class="btn btn-ghost btn-block" id="btnMilestoneClose" style="margin-top:10px;">Yopish</button>
     </div>
   </div>
 
