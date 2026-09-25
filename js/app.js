@@ -391,7 +391,6 @@ function formatWeekLabel(weekStart) {
 function getMonthBuckets(year, monthIndex) { return Core.getMonthBuckets(appData, year, monthIndex); }
 
 function renderStats() {
-  renderCalendar();
   document.getElementById("statStreak").textContent = computeCurrentStreak();
   document.getElementById("statLongest").textContent = computeLongestStreak();
 
@@ -451,7 +450,6 @@ function renderStats() {
     bars.appendChild(wrap);
   });
 
-  renderHistoryList();
   renderRecap();
 }
 
@@ -543,48 +541,7 @@ function bindCalendarEvents() {
   });
 }
 
-/* ---------- KUNLAR TARIXI VA TAHRIRLASH ---------------------------------------*/
-function formatDayLabel(d, i) {
-  if (i === 0) return "Bugun";
-  if (i === 1) return "Kecha";
-  return `${d.getDate()}.${pad(d.getMonth() + 1)} (${WEEKDAY_LABELS[d.getDay()]})`;
-}
-function renderHistoryList() {
-  const wrap = document.getElementById("historyList");
-  wrap.innerHTML = "";
-  const today = new Date();
-  for (let i = 0; i < 14; i++) {
-    const d = addDays(today, -i);
-    const key = dateKey(d);
-    const log = appData.logs[key];
-    const frozen = appData.frozenDays.includes(key);
-
-    const row = document.createElement("div");
-    row.className = "history-row";
-
-    const dateDiv = document.createElement("div");
-    dateDiv.className = "history-date";
-    dateDiv.textContent = L(formatDayLabel(d, i)) + (frozen ? " ❄" : "");
-
-    const valsDiv = document.createElement("div");
-    valsDiv.className = "history-vals";
-    const pagesVal = (log && log.pages) || 0;
-    const versesVal = (log && log.verses) || 0;
-    valsDiv.textContent = frozen && pagesVal === 0
-      ? L("Muzlatilgan")
-      : `${pagesVal} ${L("bet")} · ${versesVal} ${L(appData.goals.memoUnit)}`;
-
-    const editBtn = document.createElement("button");
-    editBtn.className = "history-edit";
-    editBtn.textContent = "✎";
-    editBtn.addEventListener("click", () => openDayEdit(key, formatDayLabel(d, i)));
-
-    row.appendChild(dateDiv);
-    row.appendChild(valsDiv);
-    row.appendChild(editBtn);
-    wrap.appendChild(row);
-  }
-}
+/* ---------- KUNNI TAHRIRLASH ---------------------------------------*/
 
 const CALENDAR_EDIT_WINDOW_DAYS = 14; // tarixni tahrirlash — bugundan shuncha kun orqaga
 
@@ -968,6 +925,7 @@ function bindNav() {
     btn.addEventListener("click", () => {
       showScreen(btn.dataset.view);
       if (btn.dataset.view === "stats") renderStats();
+      if (btn.dataset.view === "calendar") renderCalendar();
       if (btn.dataset.view === "settings") renderSettings();
       if (btn.dataset.view === "dashboard") { initDraftFromToday(); renderDashboard(); }
     });
@@ -978,6 +936,7 @@ function renderAll() {
   initDraftFromToday();
   renderDashboard();
   renderStats();
+  renderCalendar();
   renderSettings();
 }
 

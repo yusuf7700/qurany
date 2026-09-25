@@ -300,6 +300,7 @@ img{max-width:100%; display:block;}
 .calendar-legend{display:flex; gap:16px; margin-top:12px; flex-wrap:wrap;}
 .calendar-legend span{font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:6px;}
 .calendar-legend i{width:10px; height:10px; border-radius:3px; display:inline-block;}
+.calendar-hint{color:var(--muted); font-size:12.5px; margin-top:12px; line-height:1.5;}
 
 /* Kun tahrirlash varag'i — o'tmish (14 kundan eski) uchun faqat ko'rish rejimi */
 .sheet.readonly .stepper button,
