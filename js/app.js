@@ -69,14 +69,11 @@ function uzLatToCyr(str) {
 function L(str) { return currentScript() === "kirill" ? uzLatToCyr(str) : str; }
 function currentScript() { return (appData && appData.settings && appData.settings.script) || "lotin"; }
 
-/* ---------- SANA YORDAMCHILARI ------------------------------------------ */
-function pad(n) { return String(n).padStart(2, "0"); }
-function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-function todayKey() { return dateKey(new Date()); }
-function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
-function dayOfYear(d) { const start = new Date(d.getFullYear(), 0, 0); return Math.floor((d - start) / 86400000); }
-
-const WEEKDAY_LABELS = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"]; // getDay(): 0=Yakshanba
+/* ---------- SHARED CORE (js/core.js) ------------------------------------
+   Sana, streak, freeze va kalendar hisob-kitoblari endi core.js'da —
+   xuddi shu mantiq kelajakda Telegram bot backendida ham ishlatiladi. */
+const Core = window.QuranYCore;
+const { pad, dateKey, todayKey, addDays, dayOfYear, WEEKDAY_LABELS, MONTH_NAMES } = Core;
 
 /* ---------- HOLAT (STATE) ------------------------------------------------*/
 let currentUser = null;   // {uid, name, email, isGuest}
@@ -93,48 +90,9 @@ function loadLocal(uid) {
 function saveLocalRaw(uid, data) {
   try { localStorage.setItem(LS_PREFIX + uid, JSON.stringify(data)); } catch (e) {}
 }
-function defaultData(name) {
-  return {
-    name: name || "Do'stim",
-    goals: { pages: 3, verses: 5, memoUnit: "oyat", memoDays: [0,1,2,3,4,5,6] },
-    logs: {},
-    frozenDays: [],
-    lastCelebratedStreak: 0,
-    settings: { theme: "light", script: "lotin" },
-    onboarded: false
-  };
-}
-function ensureDataShape(d) {
-  d.goals = d.goals || {};
-  if (d.goals.pages == null) d.goals.pages = 3;
-  if (d.goals.verses == null) d.goals.verses = 5;
-  if (!d.goals.memoUnit) d.goals.memoUnit = "oyat";
-  if (!d.goals.memoDays || !d.goals.memoDays.length) d.goals.memoDays = [0,1,2,3,4,5,6];
-  if (d.onboarded == null) d.onboarded = false;
-  if (!d.frozenDays) d.frozenDays = [];
-  if (d.lastCelebratedStreak == null) d.lastCelebratedStreak = 0;
-  d.settings = d.settings || { theme: "light", script: "lotin" };
-  d.logs = d.logs || {};
-  return d;
-}
-function mergeData(local, remote) {
-  if (!remote) return local;
-  const merged = Object.assign({}, remote);
-  merged.logs = Object.assign({}, remote.logs || {});
-  if (local && local.logs) {
-    for (const k in local.logs) {
-      if (!merged.logs[k]) merged.logs[k] = local.logs[k];
-    }
-  }
-  const remoteFrozen = remote.frozenDays || [];
-  const localFrozen = (local && local.frozenDays) || [];
-  merged.frozenDays = Array.from(new Set([...remoteFrozen, ...localFrozen]));
-  merged.lastCelebratedStreak = remote.lastCelebratedStreak != null ? remote.lastCelebratedStreak : (local && local.lastCelebratedStreak) || 0;
-  merged.goals = remote.goals || (local && local.goals) || { pages: 3, verses: 5, memoUnit: "oyat", memoDays: [0,1,2,3,4,5,6] };
-  merged.settings = remote.settings || (local && local.settings) || { theme: "light", script: "lotin" };
-  merged.onboarded = remote.onboarded != null ? remote.onboarded : (local && local.onboarded) || false;
-  return merged;
-}
+function defaultData(name) { return Core.defaultData(name); }
+function ensureDataShape(d) { return Core.ensureDataShape(d); }
+function mergeData(local, remote) { return Core.mergeData(local, remote); }
 function persist() {
   saveLocalRaw(currentUser.uid, appData);
   if (firebaseReady && !currentUser.isGuest && fbDb) {
@@ -293,38 +251,11 @@ function bindOnboardingEvents() {
 }
 
 /* ---------- STREAK HISOBLASH -----------------------------------------------*/
-function isDayDone(key) {
-  const log = appData.logs[key];
-  const doneByLog = !!(log && log.pages >= appData.goals.pages);
-  const frozen = appData.frozenDays && appData.frozenDays.includes(key);
-  return doneByLog || frozen;
-}
-function freezesUsedInMonth(monthKey) {
-  return (appData.frozenDays || []).filter(k => k.startsWith(monthKey)).length;
-}
-function computeCurrentStreak() {
-  let cursor = new Date();
-  if (!isDayDone(dateKey(cursor))) cursor = addDays(cursor, -1);
-  let streak = 0;
-  while (isDayDone(dateKey(cursor))) {
-    streak++;
-    cursor = addDays(cursor, -1);
-  }
-  return streak;
-}
-function computeLongestStreak() {
-  const keys = Object.keys(appData.logs).sort();
-  let longest = 0, run = 0, prevDate = null;
-  for (const k of keys) {
-    if (!isDayDone(k)) { run = 0; prevDate = null; continue; }
-    const d = new Date(k + "T00:00:00");
-    if (prevDate && dateKey(addDays(prevDate, 1)) === k) run++;
-    else run = 1;
-    longest = Math.max(longest, run);
-    prevDate = d;
-  }
-  return longest;
-}
+function isDayDone(key) { return Core.isDayDone(appData, key); }
+function freezesUsedInMonth(monthKey) { return Core.freezesUsedInMonth(appData, monthKey); }
+function freezesRemainingInMonth(monthKey) { return Core.freezesRemainingInMonth(appData, monthKey); }
+function computeCurrentStreak() { return Core.computeCurrentStreak(appData); }
+function computeLongestStreak() { return Core.computeLongestStreak(appData); }
 
 /* ---------- KUNNING OYATI / HADISI -----------------------------------------*/
 function todayQuote() {
@@ -432,7 +363,6 @@ function checkMilestone() {
 let statsRange = "week";
 let statsWeekDate = new Date(); // shu haftadagi istalgan sana
 let statsMonthDate = new Date(); // joriy ko'rilayotgan oy (har doim shu oyning 1-kuni sifatida ishlatiladi)
-const MONTH_NAMES = ["Yanvar","Fevral","Mart","Aprel","May","Iyun","Iyul","Avgust","Sentyabr","Oktyabr","Noyabr","Dekabr"];
 
 function getMondayOfWeek(d) {
   const dow = d.getDay(); // 0=Yakshanba..6=Shanba
@@ -458,20 +388,7 @@ function formatWeekLabel(weekStart) {
   return `${weekStart.getDate()} ${MONTH_NAMES[weekStart.getMonth()]} - ${weekEnd.getDate()} ${MONTH_NAMES[weekEnd.getMonth()]}`;
 }
 
-function getMonthBuckets(year, monthIndex) {
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const buckets = [];
-  for (let start = 1; start <= daysInMonth; start += 7) {
-    const end = Math.min(start + 6, daysInMonth);
-    let sum = 0;
-    for (let day = start; day <= end; day++) {
-      const key = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
-      sum += (appData.logs[key] && appData.logs[key].pages) || 0;
-    }
-    buckets.push({ label: `${start}-${end}`, value: sum });
-  }
-  return buckets;
-}
+function getMonthBuckets(year, monthIndex) { return Core.getMonthBuckets(appData, year, monthIndex); }
 
 function renderStats() {
   document.getElementById("statStreak").textContent = computeCurrentStreak();
@@ -632,11 +549,16 @@ function updateDayEditUI() {
 }
 function updateFreezeUI() {
   const monthKey = dayEditDraft.key.slice(0, 7);
-  const used = freezesUsedInMonth(monthKey);
-  const available = dayEditDraft.frozen || used < 1;
+  const limit = Core.freezeLimit(appData);
+  const remaining = freezesRemainingInMonth(monthKey);
+  const available = dayEditDraft.frozen || remaining > 0;
   document.getElementById("freezeToggle").checked = dayEditDraft.frozen;
   document.getElementById("freezeSub").textContent = L(
-    dayEditDraft.frozen ? "Bu kun uchun muzlatilgan" : (available ? "Bu oy uchun mavjud (oyiga 1 marta)" : "Bu oy uchun ishlatib bo'lingan")
+    dayEditDraft.frozen
+      ? "Bu kun uchun muzlatilgan"
+      : (available
+          ? `Bu oy uchun mavjud (${remaining}/${limit} qoldi)`
+          : `Bu oy uchun ishlatib bo'lingan (oyiga ${limit} marta)`)
   );
 }
 function bindDayEditEvents() {
@@ -648,10 +570,10 @@ function bindDayEditEvents() {
   document.getElementById("freezeToggle").addEventListener("change", (e) => {
     const monthKey = dayEditDraft.key.slice(0, 7);
     if (e.target.checked) {
-      const used = freezesUsedInMonth(monthKey);
-      if (!dayEditDraft.frozen && used >= 1) {
+      const remaining = freezesRemainingInMonth(monthKey);
+      if (!dayEditDraft.frozen && remaining <= 0) {
         e.target.checked = false;
-        toast("Bu oy uchun muzlatish limiti tugagan (oyiga 1 marta).");
+        toast(`Bu oy uchun muzlatish limiti tugagan (oyiga ${Core.freezeLimit(appData)} marta).`);
         return;
       }
       dayEditDraft.frozen = true;
