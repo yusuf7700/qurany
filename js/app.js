@@ -391,6 +391,7 @@ function formatWeekLabel(weekStart) {
 function getMonthBuckets(year, monthIndex) { return Core.getMonthBuckets(appData, year, monthIndex); }
 
 function renderStats() {
+  renderCalendar();
   document.getElementById("statStreak").textContent = computeCurrentStreak();
   document.getElementById("statLongest").textContent = computeLongestStreak();
 
@@ -488,6 +489,60 @@ function bindStatsEvents() {
   });
 }
 
+/* ---------- KALENDAR (oy-grid) -------------------------------------------*/
+let calendarMonthDate = new Date();
+function renderCalendar() {
+  const y = calendarMonthDate.getFullYear();
+  const m = calendarMonthDate.getMonth();
+  document.getElementById("calLabel").textContent = L(`${MONTH_NAMES[m]} ${y}`);
+
+  const now = new Date();
+  const isCurrentMonth = y === now.getFullYear() && m === now.getMonth();
+  document.getElementById("calNext").disabled = isCurrentMonth;
+
+  const grid = document.getElementById("calendarGrid");
+  grid.innerHTML = "";
+  const cells = Core.getCalendarMonthGrid(appData, y, m);
+  cells.forEach(cell => {
+    const div = document.createElement("div");
+    if (!cell) {
+      div.className = "calendar-cell empty";
+      grid.appendChild(div);
+      return;
+    }
+    let cls = "calendar-cell";
+    if (cell.isFuture) cls += " future";
+    else if (cell.frozen) cls += " frozen";
+    else if (cell.done) cls += " done";
+    if (cell.isToday) cls += " today";
+    if (!cell.isFuture && !cell.done && !cell.frozen && !Core.isEditable(cell.key, CALENDAR_EDIT_WINDOW_DAYS)) cls += " readonly-note";
+    div.className = cls;
+    div.textContent = cell.day;
+    if (!cell.isFuture) {
+      div.addEventListener("click", () => openDayEdit(cell.key, formatCalendarDayLabel(cell.key)));
+    }
+    grid.appendChild(div);
+  });
+}
+function formatCalendarDayLabel(key) {
+  if (key === todayKey()) return "Bugun";
+  const d = new Date(key + "T00:00:00");
+  return `${d.getDate()}.${pad(d.getMonth() + 1)} (${WEEKDAY_LABELS[d.getDay()]})`;
+}
+function bindCalendarEvents() {
+  document.getElementById("calPrev").addEventListener("click", () => {
+    calendarMonthDate = new Date(calendarMonthDate.getFullYear(), calendarMonthDate.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  document.getElementById("calNext").addEventListener("click", () => {
+    const now = new Date();
+    const next = new Date(calendarMonthDate.getFullYear(), calendarMonthDate.getMonth() + 1, 1);
+    if (next.getFullYear() > now.getFullYear() || (next.getFullYear() === now.getFullYear() && next.getMonth() > now.getMonth())) return;
+    calendarMonthDate = next;
+    renderCalendar();
+  });
+}
+
 /* ---------- KUNLAR TARIXI VA TAHRIRLASH ---------------------------------------*/
 function formatDayLabel(d, i) {
   if (i === 0) return "Bugun";
@@ -531,14 +586,19 @@ function renderHistoryList() {
   }
 }
 
-let dayEditDraft = { key: null, pages: 0, verses: 0, frozen: false };
+const CALENDAR_EDIT_WINDOW_DAYS = 14; // tarixni tahrirlash — bugundan shuncha kun orqaga
+
+let dayEditDraft = { key: null, pages: 0, verses: 0, frozen: false, readOnly: false };
 function openDayEdit(key, label) {
   dayEditDraft.key = key;
   const log = appData.logs[key] || { pages: 0, verses: 0 };
   dayEditDraft.pages = log.pages || 0;
   dayEditDraft.verses = log.verses || 0;
   dayEditDraft.frozen = appData.frozenDays.includes(key);
+  dayEditDraft.readOnly = !Core.isEditable(key, CALENDAR_EDIT_WINDOW_DAYS);
   document.getElementById("dayEditTitle").textContent = L(label);
+  document.querySelector("#dayEditBackdrop .sheet").classList.toggle("readonly", dayEditDraft.readOnly);
+  document.getElementById("dayEditReadonlyNote").style.display = dayEditDraft.readOnly ? "block" : "none";
   updateDayEditUI();
   updateFreezeUI();
   document.getElementById("dayEditBackdrop").classList.add("open");
@@ -584,6 +644,7 @@ function bindDayEditEvents() {
   });
 
   document.getElementById("btnDaySave").addEventListener("click", () => {
+    if (dayEditDraft.readOnly) return;
     appData.logs[dayEditDraft.key] = { pages: dayEditDraft.pages, verses: dayEditDraft.verses };
     const idx = appData.frozenDays.indexOf(dayEditDraft.key);
     if (dayEditDraft.frozen && idx === -1) appData.frozenDays.push(dayEditDraft.key);
@@ -946,6 +1007,7 @@ function init() {
   bindStatsEvents();
   bindSettingsEvents();
   bindDayEditEvents();
+  bindCalendarEvents();
   bindShareEvents();
   setupInstallPrompt();
   registerSW();

@@ -206,6 +206,24 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Kalendar</div>
+      <div class="month-nav" id="calNav">
+        <button id="calPrev" aria-label="Oldingi oy">‹</button>
+        <span id="calLabel">Avgust 2026</span>
+        <button id="calNext" aria-label="Keyingi oy">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Du</span><span>Se</span><span>Ch</span><span>Pa</span><span>Ju</span><span>Sh</span><span>Ya</span>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+      <div class="calendar-legend">
+        <span><i style="background:linear-gradient(135deg, var(--brand-400), var(--brand-700));"></i>Bajarildi</span>
+        <span><i style="background:linear-gradient(135deg,#8FD3E8,#3E7C99);"></i>Muzlatilgan</span>
+        <span><i style="background:var(--surface-2); border:1.5px solid var(--border);"></i>Bo'sh</span>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Kunlar tarixi</div>
       <div id="historyList"></div>
     </div>
@@ -357,6 +375,7 @@
     <div class="sheet">
       <div class="sheet-handle"></div>
       <h3 id="dayEditTitle">Kun</h3>
+      <p id="dayEditReadonlyNote" style="display:none; margin-top:-8px;">Bu kun eskirgan — faqat ko'rish mumkin (oxirgi 14 kun tahrirlanadi).</p>
       <div class="task-row">
         <div class="task-info"><div class="task-name">📖 O'qish</div></div>
         <div class="stepper">

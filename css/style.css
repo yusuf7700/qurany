@@ -271,6 +271,41 @@ img{max-width:100%; display:block;}
 }
 .bead.today{box-shadow:0 0 0 3px var(--brand-100);}
 
+/* Kalendar (oy-grid) */
+.calendar-weekdays{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:8px;}
+.calendar-weekdays span{text-align:center; font-size:11px; font-weight:700; color:var(--muted);}
+.calendar-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+.calendar-cell{
+  aspect-ratio:1/1; border-radius:var(--radius-sm);
+  background:var(--surface-2); border:1.5px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12.5px; font-weight:700; color:var(--text);
+  cursor:pointer; position:relative;
+}
+.calendar-cell.empty{background:transparent; border-color:transparent; cursor:default;}
+.calendar-cell.future{color:var(--muted); opacity:.4; cursor:default;}
+.calendar-cell.done{
+  background:linear-gradient(135deg, var(--brand-400), var(--brand-700));
+  border-color:transparent; color:#fff;
+}
+.calendar-cell.frozen{
+  background:linear-gradient(135deg,#8FD3E8,#3E7C99);
+  border-color:transparent; color:#fff;
+}
+.calendar-cell.today{box-shadow:0 0 0 2.5px var(--brand-300);}
+.calendar-cell.readonly-note::after{
+  content:""; position:absolute; bottom:3px; left:50%; transform:translateX(-50%);
+  width:4px; height:4px; border-radius:50%; background:var(--muted);
+}
+.calendar-legend{display:flex; gap:16px; margin-top:12px; flex-wrap:wrap;}
+.calendar-legend span{font-size:11.5px; color:var(--muted); display:flex; align-items:center; gap:6px;}
+.calendar-legend i{width:10px; height:10px; border-radius:3px; display:inline-block;}
+
+/* Kun tahrirlash varag'i — o'tmish (14 kundan eski) uchun faqat ko'rish rejimi */
+.sheet.readonly .stepper button,
+.sheet.readonly #freezeToggle{pointer-events:none; opacity:.4;}
+.sheet.readonly #btnDaySave{display:none;}
+
 /* Bottom navigation */
 .bottom-nav{
   position:fixed;
